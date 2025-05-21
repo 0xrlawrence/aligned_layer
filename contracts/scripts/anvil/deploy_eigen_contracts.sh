@@ -40,6 +40,17 @@ cp script/output/devnet/SLASHING_deploy_from_scratch_deployment_data.json ../../
 # Restore the submodule repository
 git restore script/output/devnet/SLASHING_deploy_from_scratch_deployment_data.json
 
+# Deploy the AlignedStrategy
+cd "$parent_path"
+cd ../../
+forge script script/deploy/AlignedStrategyDeployer.s.sol:AlignedStrategyDeployerScript \
+    "./script/output/devnet/eigenlayer_deployment_output.json" \
+    "./script/config/devnet/eigen.devnet.config.json"  \
+    --rpc-url $RPC_URL \
+    --private-key $PRIVATE_KEY \
+    --broadcast
+    --sig "run(string calldata configFile, string calldata eigenOutputFile, string memory eigenOutputFile)"
+
 # Kill the anvil process to save state
 pkill anvil
 
