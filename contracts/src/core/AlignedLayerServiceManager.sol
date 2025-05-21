@@ -156,6 +156,7 @@ contract AlignedLayerServiceManager is
         // (batchMerkleRoot,senderAddress) is signed as a way to verify the batch was right
         bytes32 batchMerkleRoot,
         address senderAddress,
+        bytes calldata quorumNumbers,
         NonSignerStakesAndSignature memory nonSignerStakesAndSignature
     ) external onlyAggregator onlyWhenNotPaused(1) {
         uint256 initialGasLeft = gasleft();
@@ -194,22 +195,26 @@ contract AlignedLayerServiceManager is
         // check that aggregated BLS signature is valid
         (QuorumStakeTotals memory quorumStakeTotals, ) = checkSignatures(
             batchIdentifierHash,
+            quorumNumbers,
             currentBatch.taskCreatedBlock,
             nonSignerStakesAndSignature
         );
 
         // check that signatories own at least a threshold percentage of each quourm
-        if (
-            quorumStakeTotals.signedStakeForQuorum[0] * THRESHOLD_DENOMINATOR <
-            quorumStakeTotals.totalStakeForQuorum[0] *
-                QUORUM_THRESHOLD_PERCENTAGE
-        ) {
-            revert InvalidQuorumThreshold(
-                quorumStakeTotals.signedStakeForQuorum[0] *
-                    THRESHOLD_DENOMINATOR,
-                quorumStakeTotals.totalStakeForQuorum[0] *
+        for (uint256 i = 0; i < quorumStakeTotals.signedStakeForQuorum.length; i++) {
+            if (
+                quorumStakeTotals.signedStakeForQuorum[i] *
+                    THRESHOLD_DENOMINATOR <
+                quorumStakeTotals.totalStakeForQuorum[i] *
                     QUORUM_THRESHOLD_PERCENTAGE
-            );
+            ) {
+                revert InvalidQuorumThreshold(
+                    quorumStakeTotals.signedStakeForQuorum[i] *
+                        THRESHOLD_DENOMINATOR,
+                    quorumStakeTotals.totalStakeForQuorum[i] *
+                        QUORUM_THRESHOLD_PERCENTAGE
+                );
+            }
         }
 
         emit BatchVerified(batchMerkleRoot, senderAddress);

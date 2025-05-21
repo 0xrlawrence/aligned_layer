@@ -28,8 +28,14 @@ import (
 )
 
 // FIXME(marian): Read this from Aligned contract directly
-const QUORUM_NUMBER = byte(0)
-const QUORUM_THRESHOLD = byte(67)
+const QuorumThreshold = byte(67)
+
+var QuorumNums = eigentypes.QuorumNums{eigentypes.QuorumNum(0)}
+var QuorumThresholdPercentages = eigentypes.QuorumThresholdPercentages{eigentypes.QuorumThresholdPercentage(QuorumThreshold)}
+
+// TODO: Use these once we have two quorums deployed
+//var QuorumNums = eigentypes.QuorumNums{eigentypes.QuorumNum(0), eigentypes.QuorumNum(1)}
+//var QuorumThresholdPercentages = eigentypes.QuorumThresholdPercentages{eigentypes.QuorumThresholdPercentage(QUORUM_THRESHOLD), eigentypes.QuorumThresholdPercentage(QUORUM_THRESHOLD)}
 
 // Aggregator stores TaskResponse for a task here
 type TaskResponses = []types.SignedTaskResponse
@@ -337,6 +343,7 @@ func (agg *Aggregator) sendAggregatedResponse(batchIdentifierHash [32]byte, batc
 		batchIdentifierHash,
 		batchMerkleRoot,
 		senderAddress,
+		QuorumNums,
 		nonSignerStakesAndSignature,
 		agg.AggregatorConfig.Aggregator.GasBaseBumpPercentage,
 		agg.AggregatorConfig.Aggregator.GasBumpIncrementalPercentage,
@@ -407,10 +414,7 @@ func (agg *Aggregator) AddNewTask(batchMerkleRoot [32]byte, senderAddress [20]by
 	)
 	agg.nextBatchIndex += 1
 
-	quorumNums := eigentypes.QuorumNums{eigentypes.QuorumNum(QUORUM_NUMBER)}
-	quorumThresholdPercentages := eigentypes.QuorumThresholdPercentages{eigentypes.QuorumThresholdPercentage(QUORUM_THRESHOLD)}
-
-	err := agg.blsAggregationService.InitializeNewTaskWithWindow(batchIndex, taskCreatedBlock, quorumNums, quorumThresholdPercentages, agg.AggregatorConfig.Aggregator.BlsServiceTaskTimeout, 15*time.Second)
+	err := agg.blsAggregationService.InitializeNewTaskWithWindow(batchIndex, taskCreatedBlock, QuorumNums, QuorumThresholdPercentages, agg.AggregatorConfig.Aggregator.BlsServiceTaskTimeout, 15*time.Second)
 	if err != nil {
 		agg.logger.Fatalf("BLS aggregation service error when initializing new task: %s", err)
 	}
