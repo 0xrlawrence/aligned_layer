@@ -16,6 +16,7 @@ func RegisterOperator(
 	ctx context.Context,
 	configuration *config.OperatorConfig,
 	ecdsaConfig *config.EcdsaConfig,
+	quorumNumbers types.QuorumNums,
 	operatorToAvsRegistrationSigSalt [32]byte,
 ) error {
 	writer, err := chainio.NewAvsWriterFromConfig(configuration.BaseConfig, ecdsaConfig, nil)
@@ -25,8 +26,6 @@ func RegisterOperator(
 	}
 
 	socket := "Not Needed"
-
-	quorumNumbers := types.QuorumNums{0}
 
 	_, err = writer.RegisterOperator(ctx, ecdsaConfig.PrivateKey,
 		configuration.BlsConfig.KeyPair,
