@@ -35,8 +35,9 @@ func registerOperatorMain(ctx *cli.Context) error {
 	operatorConfig := config.NewOperatorConfig(ctx.String(config.ConfigFileFlag.Name))
 	ecdsaConfig := config.NewEcdsaConfig(ctx.String(config.ConfigFileFlag.Name), operatorConfig.BaseConfig.ChainId)
 
-	quorumNumbersBytes := []byte{byte(QuorumNumberFlag.Value)}
-	quorumNumbers := types.QuorumNums{types.QuorumNum(QuorumNumberFlag.Value)}
+	quorumNumber := ctx.Uint(QuorumNumberFlag.Name)
+	quorumNumbersBytes := []byte{byte(quorumNumber)}
+	quorumNumbers := types.QuorumNums{types.QuorumNum(quorumNumber)}
 
 	// Generate salt and expiry
 	privateKeyBytes := []byte(operatorConfig.BlsConfig.KeyPair.PrivKey.String())
