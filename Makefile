@@ -380,13 +380,13 @@ operator_deposit_into_ali_strategy:
 AMOUNT ?= 1000
 
 operator_register_with_aligned_layer_weth:
-	@echo "Registering operator with AlignedLayer"
+	@echo "Registering operator with AlignedLayer in quorum 0"
 	@go run operator/cmd/main.go register \
 		--config $(CONFIG_FILE) \
 		--quorum-number 0
 
 operator_register_with_aligned_layer_ali:
-	@echo "Registering operator with AlignedLayer"
+	@echo "Registering operator with AlignedLayer in quorum 1"
 	@go run operator/cmd/main.go register \
 		--config $(CONFIG_FILE) \
 		--quorum-number 1
