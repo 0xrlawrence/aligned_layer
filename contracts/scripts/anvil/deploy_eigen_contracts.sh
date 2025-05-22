@@ -18,6 +18,8 @@ cd eigenlayer_contracts/eigenlayer-contracts
 
 sleep 1
 
+cp ../../script/deploy/config/devnet/eigen.devnet.config.json script/configs/local/deploy_from_scratch.slashing.anvil.config.json
+
 # Deploy the contracts
 forge script script/deploy/local/deploy_from_scratch.slashing.s.sol \
   --rpc-url $RPC_URL \
@@ -27,10 +29,12 @@ forge script script/deploy/local/deploy_from_scratch.slashing.s.sol \
 
 # Whitelist strategy into strategyManager
 strategy_manager=$(jq -r '.addresses.strategyManager' script/output/devnet/SLASHING_deploy_from_scratch_deployment_data.json)
-strategy=$(jq -r '.addresses.strategy' script/output/devnet/SLASHING_deploy_from_scratch_deployment_data.json)
-echo "Whitelisting strategy ($strategy) into strategy manager ($strategy_manager)"
+strategy_WETH=$(jq -r '.addresses.strategies.WETH'  script/output/devnet/SLASHING_deploy_from_scratch_deployment_data.json)
+strategy_ALI=$(jq -r '.addresses.strategies.ALI'  script/output/devnet/SLASHING_deploy_from_scratch_deployment_data.json)
+
+echo "Whitelisting strategy ($strategy_WETH (WETH) and $strategy_ALI (ALI)) into strategy manager ($strategy_manager)"
 cast send "$strategy_manager" \
-  "addStrategiesToDepositWhitelist(address[])" "[$strategy]" \
+  "addStrategiesToDepositWhitelist(address[])" "[$strategy_WETH, $strategy_ALI"] \
   --rpc-url $RPC_URL \
   --private-key $PRIVATE_KEY \
 
@@ -39,17 +43,7 @@ cp script/output/devnet/SLASHING_deploy_from_scratch_deployment_data.json ../../
 
 # Restore the submodule repository
 git restore script/output/devnet/SLASHING_deploy_from_scratch_deployment_data.json
-
-# Deploy the AlignedStrategy
-cd "$parent_path"
-cd ../../
-forge script script/deploy/AlignedStrategyDeployer.s.sol:AlignedStrategyDeployerScript \
-    "./script/output/devnet/eigenlayer_deployment_output.json" \
-    "./script/config/devnet/eigen.devnet.config.json"  \
-    --rpc-url $RPC_URL \
-    --private-key $PRIVATE_KEY \
-    --broadcast
-    --sig "run(string calldata configFile, string calldata eigenOutputFile, string memory eigenOutputFile)"
+git restore script/configs/local/deploy_from_scratch.slashing.anvil.config.json
 
 # Kill the anvil process to save state
 pkill anvil
