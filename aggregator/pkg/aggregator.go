@@ -30,12 +30,8 @@ import (
 // FIXME(marian): Read this from Aligned contract directly
 const QuorumThreshold = byte(67)
 
-var QuorumNums = eigentypes.QuorumNums{eigentypes.QuorumNum(0)}
-var QuorumThresholdPercentages = eigentypes.QuorumThresholdPercentages{eigentypes.QuorumThresholdPercentage(QuorumThreshold)}
-
-// TODO: Use these once we have two quorums deployed
-//var QuorumNums = eigentypes.QuorumNums{eigentypes.QuorumNum(0), eigentypes.QuorumNum(1)}
-//var QuorumThresholdPercentages = eigentypes.QuorumThresholdPercentages{eigentypes.QuorumThresholdPercentage(QUORUM_THRESHOLD), eigentypes.QuorumThresholdPercentage(QUORUM_THRESHOLD)}
+var QuorumNums = eigentypes.QuorumNums{eigentypes.QuorumNum(0), eigentypes.QuorumNum(1)}
+var QuorumThresholdPercentages = eigentypes.QuorumThresholdPercentages{eigentypes.QuorumThresholdPercentage(QuorumThreshold), eigentypes.QuorumThresholdPercentage(QuorumThreshold)}
 
 // Aggregator stores TaskResponse for a task here
 type TaskResponses = []types.SignedTaskResponse
