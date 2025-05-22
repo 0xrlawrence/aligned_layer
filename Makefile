@@ -267,11 +267,11 @@ operator_set_eigen_sdk_go_version_error:
 	@echo "Error setting Eigen SDK version, missing ENVIRONMENT. Possible values for ENVIRONMENT=<devnet|testnet|mainnet>"
 	exit 1
 
-operator_full_registration_base: operator_get_eth operator_register_with_eigen_layer operator_whitelist_devnet
-operator_full_registration_weth: operator_full_registration_base operator_mint_mock_tokens operator_deposit_into_mock_strategy operator_register_with_aligned_layer_weth
-operator_full_registration_ali: operator_full_registration_base operator_mint_mock_tokens operator_deposit_into_mock_strategy operator_register_with_aligned_layer_ali
+operator_full_registration_base: operator_get_eth operator_register_with_eigen_layer operator_whitelist_devnet operator_mint_mock_tokens
+operator_full_registration_weth: operator_full_registration_base  operator_deposit_into_weth_strategy operator_register_with_aligned_layer_weth
+operator_full_registration_ali: operator_full_registration_base operator_deposit_into_ali_strategy operator_register_with_aligned_layer_ali
 
-operator_full_registration: operator_full_registration_base operator_mint_mock_tokens operator_deposit_into_mock_strategy operator_register_with_aligned_layer_weth
+operator_full_registration: operator_full_registration_base operator_deposit_into_weth_strategy operator_deposit_into_ali_strategy operator_register_with_aligned_layer_weth operator_register_with_aligned_layer_ali
 
 operator_register_and_start: $(GET_SDK_VERSION) operator_full_registration operator_start
 
@@ -360,8 +360,16 @@ operator_remove_from_whitelist:
 	@echo "Removing operator $(OPERATOR_ADDRESS)"
 	@. contracts/scripts/.env && . contracts/scripts/operator_remove_from_whitelist.sh $(OPERATOR_ADDRESS)
 
-operator_deposit_into_mock_strategy:
-	@echo "Depositing into mock strategy"
+operator_deposit_into_weth_strategy:
+	@echo "Depositing into WETH strategy"
+	$(eval STRATEGY_ADDRESS = $(shell jq -r '.addresses.strategies.WETH' contracts/script/output/devnet/eigenlayer_deployment_output.json))
+	@go run operator/cmd/main.go deposit-into-strategy \
+		--config $(CONFIG_FILE) \
+		--strategy-address $(STRATEGY_ADDRESS) \
+		--amount 100000000000000000
+
+operator_deposit_into_ali_strategy:
+	@echo "Depositing into ALI strategy"
 	$(eval STRATEGY_ADDRESS = $(shell jq -r '.addresses.strategies.ALI' contracts/script/output/devnet/eigenlayer_deployment_output.json))
 	@go run operator/cmd/main.go deposit-into-strategy \
 		--config $(CONFIG_FILE) \
@@ -371,28 +379,21 @@ operator_deposit_into_mock_strategy:
 
 AMOUNT ?= 1000
 
-operator_deposit_into_strategy:
-	@echo "Depositing into strategy"
-	@go run operator/cmd/main.go deposit-into-strategy \
-		--config $(CONFIG_FILE) \
-		--strategy-address $(STRATEGY_ADDRESS) \
-		--amount $(AMOUNT)
-
 operator_register_with_aligned_layer_weth:
 	@echo "Registering operator with AlignedLayer"
 	@go run operator/cmd/main.go register \
 		--config $(CONFIG_FILE) \
 		--quorum-number 0
-	
+
 operator_register_with_aligned_layer_ali:
 	@echo "Registering operator with AlignedLayer"
 	@go run operator/cmd/main.go register \
 		--config $(CONFIG_FILE) \
 		--quorum-number 1
 
-operator_deposit_and_register_weth: operator_deposit_into_strategy operator_register_with_aligned_layer_weth
+operator_deposit_and_register_weth: operator_deposit_into_weth_strategy operator_register_with_aligned_layer_weth
 
-operator_deposit_and_register_ali: operator_deposit_into_strategy operator_register_with_aligned_layer_ali
+operator_deposit_and_register_ali: operator_deposit_into_ali_strategy operator_register_with_aligned_layer_ali
 
 
 # The verifier ID to enable or disable corresponds to the index of the verifier in the `ProvingSystemID` enum.
