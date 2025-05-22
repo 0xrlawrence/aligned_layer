@@ -21,6 +21,7 @@
     "rewardsCoordinator": "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
     "rewardsCoordinatorImplementation": "0x959922bE3CAee4b8Cd9a407cc3ac1C251C2007B1",
     "strategies": {
+      "ALI": "0xE6E340D132b5f46d1e472DebcD681B2aBc16e57E",
       "WETH": "0xc5a5C42992dECbae36851359345FE25997F5C42d"
     },
     "strategy": "0xc5a5C42992dECbae36851359345FE25997F5C42d",

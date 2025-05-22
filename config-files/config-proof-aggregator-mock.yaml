@@ -1,5 +1,5 @@
-aligned_service_manager_address: "0x1613beB3B2C4f22Ee086B2b38C1476A3cE7f78E8"
-proof_aggregation_service_address: "0x1429859428C0aBc9C2C47C8Ee9FBaf82cFA0F20f"
+aligned_service_manager_address: "0xf5059a5D33d5853360D16C683c16e67980206f36"
+proof_aggregation_service_address: "0x162A433068F51e18b7d13932F27e66a3f99E6890"
 eth_rpc_url: "http://localhost:8545"
 eth_ws_url: "ws://localhost:8545"
 max_proofs_in_queue: 1000

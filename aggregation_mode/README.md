@@ -61,11 +61,11 @@ make start_proof_aggregator_gpu AGGREGATOR="sp1|risc0"
 1. Get latest aggregated proof:
 
 ```shell
-cast call 0xc351628EB244ec633d5f21fBD6621e1a683B1181 "currentAggregatedProofNumber()" --rpc-url http://localhost:8545
+cast call 0x1429859428C0aBc9C2C47C8Ee9FBaf82cFA0F20f "currentAggregatedProofNumber()" --rpc-url http://localhost:8545
 ```
 
 2. Get aggregated proof info:
 
 ```shell
-cast call 0xc351628EB244ec633d5f21fBD6621e1a683B1181 "getAggregatedProof(uint64)(uint8,bytes32,bytes32)" <AGG_PROOF_NUMBER>  --rpc-url http://localhost:8545
+cast call 0x1429859428C0aBc9C2C47C8Ee9FBaf82cFA0F20f "getAggregatedProof(uint64)(uint8,bytes32,bytes32)" <AGG_PROOF_NUMBER>  --rpc-url http://localhost:8545
 ```
