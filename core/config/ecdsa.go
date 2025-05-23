@@ -3,18 +3,20 @@ package config
 import (
 	"crypto/ecdsa"
 	"errors"
+	"github.com/ethereum/go-ethereum/common"
 	"log"
 	"math/big"
 	"os"
 
 	ecdsa2 "github.com/Layr-Labs/eigensdk-go/crypto/ecdsa"
-	"github.com/Layr-Labs/eigensdk-go/signer"
+	signer "github.com/Layr-Labs/eigensdk-go/signerv2"
 	"github.com/yetanotherco/aligned_layer/core/utils"
 )
 
 type EcdsaConfig struct {
+	Address    common.Address
 	PrivateKey *ecdsa.PrivateKey
-	Signer     signer.Signer
+	SignerFn   signer.SignerFn
 }
 
 type EcdsaConfigFromYaml struct {
@@ -44,13 +46,17 @@ func NewEcdsaConfig(ecdsaConfigFilePath string, chainId *big.Int) *EcdsaConfig {
 		log.Fatal("Error reading ecdsa private key from file: ", err)
 	}
 
-	privateKeySigner, err := signer.NewPrivateKeySigner(ecdsaKeyPair, chainId)
+	signerConfig := signer.Config{
+		PrivateKey: ecdsaKeyPair,
+	}
+	signerFn, address, err := signer.SignerFromConfig(signerConfig, chainId)
 	if err != nil {
-		log.Fatal("Error creating private key signer: ", err)
+		log.Fatal("Cannot create signer", "err", err)
 	}
 
 	return &EcdsaConfig{
+		Address:    address,
 		PrivateKey: ecdsaKeyPair,
-		Signer:     privateKeySigner,
+		SignerFn:   signerFn,
 	}
 }

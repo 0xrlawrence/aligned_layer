@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	blsagg "github.com/Layr-Labs/eigensdk-go/services/bls_aggregation"
 	"net/http"
 	"net/rpc"
 	"time"
@@ -85,18 +86,24 @@ func (agg *Aggregator) ProcessOperatorSignedTaskResponseV2(signedTaskResponse *t
 
 	agg.logger.Info("Starting bls signature process")
 	go func() {
+		taskSignature := blsagg.NewTaskSignature(
+			taskIndex,
+			signedTaskResponse.BatchIdentifierHash,
+			&signedTaskResponse.BlsSignature,
+			signedTaskResponse.OperatorId,
+		)
 		err := agg.blsAggregationService.ProcessNewSignature(
-			context.Background(), taskIndex, signedTaskResponse.BatchIdentifierHash,
-			&signedTaskResponse.BlsSignature, signedTaskResponse.OperatorId,
+			context.Background(),
+			taskSignature,
 		)
 
 		if err != nil {
 			agg.logger.Warnf("BLS aggregation service error: %s", err)
-			done<- 1
+			done <- 1
 			// todo shouldn't we here close the channel with a reply = 1?
 		} else {
 			agg.logger.Info("BLS process succeeded")
-			done<- 0
+			done <- 0
 		}
 
 		close(done)

@@ -410,7 +410,14 @@ func (agg *Aggregator) AddNewTask(batchMerkleRoot [32]byte, senderAddress [20]by
 	quorumNums := eigentypes.QuorumNums{eigentypes.QuorumNum(QUORUM_NUMBER)}
 	quorumThresholdPercentages := eigentypes.QuorumThresholdPercentages{eigentypes.QuorumThresholdPercentage(QUORUM_THRESHOLD)}
 
-	err := agg.blsAggregationService.InitializeNewTaskWithWindow(batchIndex, taskCreatedBlock, quorumNums, quorumThresholdPercentages, agg.AggregatorConfig.Aggregator.BlsServiceTaskTimeout, 15*time.Second)
+	taskMetadata := blsagg.NewTaskMetadata(
+		batchIndex,
+		taskCreatedBlock,
+		quorumNums,
+		quorumThresholdPercentages,
+		agg.AggregatorConfig.Aggregator.BlsServiceTaskTimeout,
+	).WithWindowDuration(15 * time.Second)
+	err := agg.blsAggregationService.InitializeNewTask(taskMetadata)
 	if err != nil {
 		agg.logger.Fatalf("BLS aggregation service error when initializing new task: %s", err)
 	}

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"github.com/Layr-Labs/eigensdk-go/chainio/clients/wallet"
+	"github.com/Layr-Labs/eigensdk-go/chainio/txmgr"
 	"math/big"
 	"time"
 
@@ -11,7 +13,6 @@ import (
 	"github.com/Layr-Labs/eigensdk-go/chainio/clients/avsregistry"
 	"github.com/Layr-Labs/eigensdk-go/chainio/clients/eth"
 	"github.com/Layr-Labs/eigensdk-go/logging"
-	"github.com/Layr-Labs/eigensdk-go/signer"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -26,7 +27,8 @@ type AvsWriter struct {
 	*avsregistry.ChainWriter
 	AvsContractBindings *AvsServiceBindings
 	logger              logging.Logger
-	Signer              signer.Signer
+	TxManager           txmgr.SimpleTxManager
+	TxManagerFallback   txmgr.SimpleTxManager
 	Client              eth.InstrumentedClient
 	ClientFallback      eth.InstrumentedClient
 	metrics             *metrics.Metrics
@@ -41,6 +43,7 @@ func NewAvsWriterFromConfig(baseConfig *config.BaseConfig, ecdsaConfig *config.E
 		OperatorStateRetrieverAddr: baseConfig.AlignedLayerDeploymentConfig.AlignedLayerOperatorStateRetrieverAddr.String(),
 		AvsName:                    "AlignedLayer",
 		PromMetricsIpPortAddress:   baseConfig.EigenMetricsIpPortAddress,
+		ServiceManagerAddress:      baseConfig.AlignedLayerDeploymentConfig.AlignedLayerServiceManagerAddr.String(),
 	}
 
 	clients, err := clients.BuildAll(buildAllConfig, ecdsaConfig.PrivateKey, baseConfig.Logger)
@@ -57,11 +60,15 @@ func NewAvsWriterFromConfig(baseConfig *config.BaseConfig, ecdsaConfig *config.E
 		return nil, err
 	}
 
-	privateKeySigner, err := signer.NewPrivateKeySigner(ecdsaConfig.PrivateKey, baseConfig.ChainId)
+	privateKeyWallet, err := wallet.NewPrivateKeyWallet(&baseConfig.EthRpcClient, ecdsaConfig.SignerFn, ecdsaConfig.Address, baseConfig.Logger)
 	if err != nil {
-		baseConfig.Logger.Error("Cannot create signer", "err", err)
+		baseConfig.Logger.Error("Cannot create private key wallet", "err", err)
 		return nil, err
 	}
+
+	txManager := txmgr.NewSimpleTxManager(privateKeyWallet, &baseConfig.EthRpcClient, baseConfig.Logger, ecdsaConfig.Address)
+
+	txManagerFallback := txmgr.NewSimpleTxManager(privateKeyWallet, &baseConfig.EthRpcClientFallback, baseConfig.Logger, ecdsaConfig.Address)
 
 	chainWriter := clients.AvsRegistryChainWriter
 
@@ -69,7 +76,8 @@ func NewAvsWriterFromConfig(baseConfig *config.BaseConfig, ecdsaConfig *config.E
 		ChainWriter:         chainWriter,
 		AvsContractBindings: avsServiceBindings,
 		logger:              baseConfig.Logger,
-		Signer:              privateKeySigner,
+		TxManager:           *txManager,
+		TxManagerFallback:   *txManagerFallback,
 		Client:              baseConfig.EthRpcClient,
 		ClientFallback:      baseConfig.EthRpcClientFallback,
 		metrics:             metrics,
@@ -90,12 +98,14 @@ func NewAvsWriterFromConfig(baseConfig *config.BaseConfig, ecdsaConfig *config.E
 //     without an error (returning `nil, nil`).
 //   - An error if the process encounters a fatal issue (e.g., permanent failure in verifying balances or state).
 func (w *AvsWriter) SendAggregatedResponse(batchIdentifierHash [32]byte, batchMerkleRoot [32]byte, senderAddress [20]byte, nonSignerStakesAndSignature servicemanager.IBLSSignatureCheckerNonSignerStakesAndSignature, gasBumpPercentage uint, gasBumpIncrementalPercentage uint, gasBumpPercentageLimit uint, timeToWaitBeforeBump time.Duration, metrics *metrics.Metrics, onSetGasPrice func(*big.Int)) (*types.Receipt, error) {
-	txOpts := *w.Signer.GetTxOpts()
+	txOpts, err := w.TxManager.GetNoSendTxOpts()
 	txOpts.NoSend = true // simulate the transaction
-	simTx, err := w.RespondToTaskV2Retryable(&txOpts, batchMerkleRoot, senderAddress, nonSignerStakesAndSignature, retry.SendToChainRetryParams())
+	simTx, err := w.RespondToTaskV2Retryable(txOpts, batchMerkleRoot, senderAddress, nonSignerStakesAndSignature, retry.SendToChainRetryParams())
 	if err != nil {
+		w.logger.Errorf("Failed to simulate transaction: %v", err)
 		return nil, err
 	}
+	w.logger.Infof("Simulated transaction: %v", simTx.Hash().Hex())
 
 	// Set the nonce, as we might have to replace the transaction with a higher gas price
 	txNonce := big.NewInt(int64(simTx.Nonce()))
@@ -168,22 +178,23 @@ func (w *AvsWriter) SendAggregatedResponse(batchIdentifierHash [32]byte, batchMe
 
 		// We compare both Aggregator funds and Batcher balance in Aligned against respondToTaskFeeLimit
 		// Both are required to have some balance, more details inside the function
-		err = w.checkAggAndBatcherHaveEnoughBalance(simTx, txOpts, batchIdentifierHash, senderAddress)
+		err = w.checkAggAndBatcherHaveEnoughBalance(simTx, *txOpts, batchIdentifierHash, senderAddress)
 		if err != nil {
 			w.logger.Errorf("Permanent error when checking aggregator and batcher balances, err %v", err, "merkle root", batchMerkleRootHashString)
 			return nil, retry.PermanentError{Inner: err}
 		}
 
 		w.logger.Infof("Sending RespondToTask transaction with a gas price of %v", txOpts.GasPrice, "merkle root", batchMerkleRootHashString)
-		realTx, err := w.RespondToTaskV2Retryable(&txOpts, batchMerkleRoot, senderAddress, nonSignerStakesAndSignature, retry.SendToChainRetryParams())
+		//realTx, err := w.RespondToTaskV2Retryable(txOpts, batchMerkleRoot, senderAddress, quorumNums, nonSignerStakesAndSignature, retry.SendToChainRetryParams())
+		receipt, err := w.SendTransactionRetryable(context.Background(), simTx, false, retry.SendToChainRetryParams())
 		if err != nil {
 			w.logger.Errorf("Respond to task transaction err, %v", err, "merkle root", batchMerkleRootHashString)
 			return nil, err
 		}
-		sentTxs = append(sentTxs, realTx)
+		sentTxs = append(sentTxs, simTx)
 
 		w.logger.Infof("Transaction sent, waiting for receipt", "merkle root", batchMerkleRootHashString)
-		receipt, err := utils.WaitForTransactionReceiptRetryable(w.Client, w.ClientFallback, realTx.Hash(), retry.WaitForTxRetryParams(timeToWaitBeforeBump))
+		receipt, err = utils.WaitForTransactionReceiptRetryable(w.Client, w.ClientFallback, receipt.TxHash, retry.WaitForTxRetryParams(timeToWaitBeforeBump))
 		if receipt != nil {
 			w.updateAggregatorGasCostMetrics(receipt, batchIdentifierHash)
 			return receipt, nil

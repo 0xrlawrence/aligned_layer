@@ -15,6 +15,19 @@ import (
 
 // |---AVS_WRITER---|
 
+func (w *AvsWriter) SendTransactionRetryable(ctx context.Context, tx *types.Transaction, waitForReceipt bool, config *retry.RetryParams) (*types.Receipt, error) {
+	sendTransaction_func := func() (*types.Receipt, error) {
+		// Try with main txManager
+		receipt, err := w.TxManager.Send(ctx, tx, waitForReceipt)
+		if err != nil {
+			// If error try with fallback txManager
+			receipt, err = w.TxManagerFallback.Send(ctx, tx, waitForReceipt)
+		}
+		return receipt, err
+	}
+	return retry.RetryWithData(sendTransaction_func, config)
+}
+
 /*
 RespondToTaskV2Retryable
 Send a transaction to the AVS contract to respond to a task.

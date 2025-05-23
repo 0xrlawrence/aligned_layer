@@ -80,9 +80,23 @@ func depositIntoStrategyMain(ctx *cli.Context) error {
 	txMgr := txmgr.NewSimpleTxManager(w, &opConfig.BaseConfig.EthRpcClient, opConfig.BaseConfig.Logger,
 		opConfig.Operator.Address)
 	eigenMetrics := metrics.NewNoopMetrics()
-	eigenLayerWriter, err := elcontracts.BuildELChainWriter(delegationManagerAddr, avsDirectoryAddr,
-		&opConfig.BaseConfig.EthRpcClient, opConfig.BaseConfig.Logger, eigenMetrics, txMgr)
+
+	writerConfig := elcontracts.Config{
+		DelegationManagerAddress:    delegationManagerAddr,
+		AvsDirectoryAddress:         avsDirectoryAddr,
+		RewardsCoordinatorAddress:   common.HexToAddress(""),
+		PermissionControllerAddress: common.HexToAddress(""),
+		DontUseAllocationManager:    true,
+	}
+	eigenLayerWriter, err := elcontracts.NewWriterFromConfig(
+		writerConfig,
+		&opConfig.BaseConfig.EthRpcClient,
+		opConfig.BaseConfig.Logger,
+		eigenMetrics,
+		txMgr,
+	)
 	if err != nil {
+		opConfig.BaseConfig.Logger.Errorf("Error creating eigen layer writer")
 		return err
 	}
 
