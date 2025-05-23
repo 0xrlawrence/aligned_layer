@@ -15,13 +15,14 @@ import (
 
 // |---AVS_WRITER---|
 
-func (w *AvsWriter) SendTransactionRetryable(ctx context.Context, tx *types.Transaction, waitForReceipt bool, config *retry.RetryParams) (*types.Receipt, error) {
+func (w *AvsWriter) SendTransactionRetryable(ctx context.Context, tx *types.Transaction, config *retry.RetryParams) (*types.Receipt, error) {
+	// Note: waitForReceipt parameter is ignored in GeometricTxManager
 	sendTransaction_func := func() (*types.Receipt, error) {
 		// Try with main txManager
-		receipt, err := w.TxManager.Send(ctx, tx, waitForReceipt)
+		receipt, err := w.TxManager.Send(ctx, tx, true)
 		if err != nil {
 			// If error try with fallback txManager
-			receipt, err = w.TxManagerFallback.Send(ctx, tx, waitForReceipt)
+			receipt, err = w.TxManagerFallback.Send(ctx, tx, true)
 		}
 		return receipt, err
 	}
