@@ -31,10 +31,11 @@ aggregator:
   garbage_collector_tasks_age: 20 #The age of tasks that will be removed by the GC, in blocks. Suggested value for prod: '216000' (30 days)
   garbage_collector_tasks_interval: 10 #The interval of queried blocks to get an old batch. Suggested value for prod: '900' (3 hours)
   bls_service_task_timeout: 168h # The timeout of bls aggregation service tasks. Suggested value for prod '168h' (7 days)
-  gas_base_bump_percentage: 25 # Percentage to overestimate gas price when sending a task
-  gas_bump_incremental_percentage: 20 # An extra percentage to overestimate in each bump of respond to task. This is additive between tries
-  # Gas used formula = est_gas_by_node * (gas_base_bump_percentage + gas_bum_incremental_percentage * i) / 100, where i is the iteration number.
-  gas_bump_percentage_limit: 150 # The max percentage to bump the gas price.
-  # The Gas formula is percentage (gas_base_bump_percentage + gas_bump_incremental_percentage * i) / 100) is checked against this value
-  # If it is higher, it will default to `gas_bump_percentage_limit`
-  time_to_wait_before_bump: 72s # The time to wait for the receipt when responding to task. Suggested value 72 seconds (6 blocks)
+  confirmation_blocks: 0 # number of blocks to wait for a transaction to be confirmed. default: 0
+  txn_broadcast_timeout: 2m # time to wait for a transaction to be broadcasted to the network. default: 2 minutes
+  txn_confirmation_timeout: 60s # time to wait for a transaction to be confirmed (mined + confirmationBlocks blocks). default: 5 * 12 seconds
+  max_send_transaction_retry: 3 # max number of times to retry sending a transaction before failing. this applies to every transaction attempt when a nonce is bumped. default: 3
+  get_tx_receipt_ticker_duration: 3s # time to wait between checking for each transaction receipt while monitoring transactions to get mined. default: 3 seconds
+  fallback_gas_tip_cap: 5_000_000_000 # default gas tip cap to use when eth_maxPriorityFeePerGas is not available. default: 5 gwei
+  gas_multiplier: 1.2 # multiplier for gas limit to add a buffer and increase chance of tx getting included. Should be >= 1.0. default: 1.2
+  gas_tip_multiplier: 1.25 # multiplier for gas tip. Should be >= 1.0. default: 1.25

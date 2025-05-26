@@ -31,6 +31,11 @@ aggregator:
   garbage_collector_tasks_age: 300 #The age of tasks that will be removed by the GC, in blocks. Suggested value for prod: '216000' (30 days)
   garbage_collector_tasks_interval: 300 #The interval of queried blocks to get an old batch. Suggested value for prod: '900' (3 hours)
   bls_service_task_timeout: 168h # The timeout of bls aggregation service tasks. Suggested value for prod '168h' (7 days)
-  gas_base_bump_percentage: 10 # How much to bump gas price when responding to task. Suggested value 10%
-  gas_bump_incremental_percentage: 2 # An extra percentage to bump every retry i*2 when responding to task. Suggested value 2%
-  time_to_wait_before_bump: 36s # The time to wait for the receipt when responding to task. Suggested value 36 seconds (3 blocks)
+  confirmation_blocks: 0 # number of blocks to wait for a transaction to be confirmed. default: 0
+  txn_broadcast_timeout: 2m # time to wait for a transaction to be broadcasted to the network. default: 2 minutes
+  txn_confirmation_timeout: 60s # time to wait for a transaction to be confirmed (mined + confirmationBlocks blocks). default: 5 * 12 seconds
+  max_send_transaction_retry: 3 # max number of times to retry sending a transaction before failing. this applies to every transaction attempt when a nonce is bumped. default: 3
+  get_tx_receipt_ticker_duration: 3s # time to wait between checking for each transaction receipt while monitoring transactions to get mined. default: 3 seconds
+  fallback_gas_tip_cap: 5_000_000_000 # default gas tip cap to use when eth_maxPriorityFeePerGas is not available. default: 5 gwei
+  gas_multiplier: 1.2 # multiplier for gas limit to add a buffer and increase chance of tx getting included. Should be >= 1.0. default: 1.2
+  gas_tip_multiplier: 1.25 # multiplier for gas tip. Should be >= 1.0. default: 1.25

@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"math/big"
+	"github.com/Layr-Labs/eigensdk-go/chainio/txmgr/geometric"
 	"sync"
 	"time"
 
@@ -119,7 +119,23 @@ func NewAggregator(aggregatorConfig config.AggregatorConfig) (*Aggregator, error
 		return nil, err
 	}
 
-	avsWriter, err := chainio.NewAvsWriterFromConfig(aggregatorConfig.BaseConfig, aggregatorConfig.EcdsaConfig, aggregatorMetrics)
+	geometricTransactionManagerParams := geometric.GeometricTxnManagerParams{
+		ConfirmationBlocks:         aggregatorConfig.Aggregator.ConfirmationBlocks,
+		TxnBroadcastTimeout:        aggregatorConfig.Aggregator.TxnBroadcastTimeout,
+		TxnConfirmationTimeout:     aggregatorConfig.Aggregator.TxnConfirmationTimeout,
+		MaxSendTransactionRetry:    aggregatorConfig.Aggregator.MaxSendTransactionRetry,
+		GetTxReceiptTickerDuration: aggregatorConfig.Aggregator.GetTxReceiptTickerDuration,
+		FallbackGasTipCap:          aggregatorConfig.Aggregator.FallbackGasTipCap,
+		GasMultiplier:              aggregatorConfig.Aggregator.GasMultiplier,
+		GasTipMultiplier:           aggregatorConfig.Aggregator.GasTipMultiplier,
+	}
+
+	avsWriter, err := chainio.NewAvsWriterFromConfig(
+		aggregatorConfig.BaseConfig,
+		aggregatorConfig.EcdsaConfig,
+		aggregatorMetrics,
+		geometricTransactionManagerParams,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -327,23 +343,12 @@ func (agg *Aggregator) sendAggregatedResponse(batchIdentifierHash [32]byte, batc
 		"senderAddress", hex.EncodeToString(senderAddress[:]),
 		"batchIdentifierHash", hex.EncodeToString(batchIdentifierHash[:]))
 
-	// This function is a callback that is called when the gas price is bumped on the avsWriter.SendAggregatedResponse
-	onSetGasPrice := func(gasPrice *big.Int) {
-		agg.telemetry.TaskSetGasPrice(batchMerkleRoot, gasPrice.String())
-	}
-
 	startTime := time.Now()
 	receipt, err := agg.avsWriter.SendAggregatedResponse(
 		batchIdentifierHash,
 		batchMerkleRoot,
 		senderAddress,
 		nonSignerStakesAndSignature,
-		agg.AggregatorConfig.Aggregator.GasBaseBumpPercentage,
-		agg.AggregatorConfig.Aggregator.GasBumpIncrementalPercentage,
-		agg.AggregatorConfig.Aggregator.GasBumpPercentageLimit,
-		agg.AggregatorConfig.Aggregator.TimeToWaitBeforeBump,
-		agg.metrics,
-		onSetGasPrice,
 	)
 	if err != nil {
 		agg.walletMutex.Unlock()

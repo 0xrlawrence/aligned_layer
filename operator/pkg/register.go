@@ -2,6 +2,7 @@ package operator
 
 import (
 	"context"
+	"github.com/Layr-Labs/eigensdk-go/chainio/txmgr/geometric"
 
 	"github.com/Layr-Labs/eigensdk-go/types"
 	"github.com/yetanotherco/aligned_layer/core/chainio"
@@ -18,7 +19,7 @@ func RegisterOperator(
 	ecdsaConfig *config.EcdsaConfig,
 	operatorToAvsRegistrationSigSalt [32]byte,
 ) error {
-	writer, err := chainio.NewAvsWriterFromConfig(configuration.BaseConfig, ecdsaConfig, nil)
+	writer, err := chainio.NewAvsWriterFromConfig(configuration.BaseConfig, ecdsaConfig, nil, geometric.GeometricTxnManagerParams{})
 	if err != nil {
 		configuration.BaseConfig.Logger.Error("Failed to create AVS writer", "err", err)
 		return err
