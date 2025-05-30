@@ -15,6 +15,14 @@ import (
 
 // |---AVS_WRITER---|
 
+/*
+SendTransactionRetryable
+Send a transaction to the Ethereum node.
+- All errors are considered Transient Errors
+- Retry times (3 retries): 12 sec (1 Blocks), 24 sec (2 Blocks), 48 sec (4 Blocks)
+- NOTE: Contract call reverts are not considered `PermanentError`'s as block reorg's may lead to contract call revert in which case the aggregator should retry.
+- NOTE: If ()err != nil) receipt is guaranteed to be not nil.
+*/
 func (w *AvsWriter) SendTransactionRetryable(ctx context.Context, tx *types.Transaction, config *retry.RetryParams) (*types.Receipt, error) {
 	// Note: waitForReceipt parameter is ignored in GeometricTxManager
 	sendTransaction_func := func() (*types.Receipt, error) {

@@ -123,15 +123,11 @@ func NewAvsWriterFromConfig(baseConfig *config.BaseConfig, ecdsaConfig *config.E
 // SendAggregatedResponse continuously sends a RespondToTask transaction until it is included in the blockchain.
 // This function:
 //  1. Simulates the transaction to calculate the nonce and initial gas price without broadcasting it.
-//  2. Repeatedly attempts to send the transaction, bumping the gas price after `timeToWaitBeforeBump` has passed.
-//  3. Monitors for the receipt of previously sent transactions or checks the state to confirm if the response
-//     has already been processed (e.g., by another transaction).
-//  4. Validates that the aggregator and batcher have sufficient balance to cover transaction costs before sending.
+//  2. Validates that the aggregator and batcher have sufficient balance to cover transaction costs before sending.
+//  3. Repeatedly attempts to send the transaction via GeometricTxManager, bumping the gas price after `txn_confirmation_timeout` has passed.
 //
 // Returns:
 //   - A transaction receipt if the transaction is successfully included in the blockchain.
-//   - If no receipt is found, but the batch state indicates the response has already been processed, it exits
-//     without an error (returning `nil, nil`).
 //   - An error if the process encounters a fatal issue (e.g., permanent failure in verifying balances or state).
 func (w *AvsWriter) SendAggregatedResponse(batchIdentifierHash [32]byte, batchMerkleRoot [32]byte, senderAddress [20]byte, nonSignerStakesAndSignature servicemanager.IBLSSignatureCheckerNonSignerStakesAndSignature) (*types.Receipt, error) {
 	txOpts, err := w.TxManager.GetNoSendTxOpts()
@@ -139,7 +135,7 @@ func (w *AvsWriter) SendAggregatedResponse(batchIdentifierHash [32]byte, batchMe
 		w.logger.Errorf("Failed to get transaction options: %v", err)
 		return nil, err
 	}
-	// This is used to simulate the transaction and get the transaction ready for sending
+	// Note: txOpts is set to simulate the tx. This is to make sure it won't revert and get the transaction ready for sending.
 	tx, err := w.RespondToTaskV2Retryable(txOpts, batchMerkleRoot, senderAddress, nonSignerStakesAndSignature, retry.SendToChainRetryParams())
 	if err != nil {
 		w.logger.Errorf("Failed to simulate transaction: %v", err)
@@ -164,7 +160,7 @@ func (w *AvsWriter) SendAggregatedResponse(batchIdentifierHash [32]byte, batchMe
 			return nil, err
 		}
 		w.logger.Infof("RespondToTask transaction (%v) sent for MerkleRoot %v. %+v", tx.Hash().Hex(), batchMerkleRootHashString, receipt)
-		w.updateAggregatorGasCostMetrics(receipt, batchIdentifierHash) // At this point receipt is not nil, so we can safely update the metrics
+		w.updateAggregatorGasCostMetrics(receipt, batchIdentifierHash)
 		return receipt, nil
 	}
 	return retry.RetryWithData(respondToTaskV2Func, retry.RespondToTaskV2())
