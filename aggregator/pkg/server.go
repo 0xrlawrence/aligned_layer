@@ -143,7 +143,7 @@ func (agg *Aggregator) GetTaskIndexRetryable(batchIdentifierHash [32]byte, confi
 		taskIndex, ok := agg.batchesIdxByIdentifierHash[batchIdentifierHash]
 		agg.taskMutex.Unlock()
 		if !ok {
-			return taskIndex, fmt.Errorf("Task not found in the internal map")
+			return taskIndex, fmt.Errorf("task not found in the internal map")
 		} else {
 			return taskIndex, nil
 		}

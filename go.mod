@@ -7,14 +7,14 @@ require (
 	github.com/ethereum/go-ethereum v1.15.0
 	github.com/prometheus/client_golang v1.20.5
 	github.com/urfave/cli/v2 v2.27.5
-	golang.org/x/crypto v0.32.0
+	golang.org/x/crypto v0.33.0
 )
 
 require (
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20240806141605-e8a1dd7889d6
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/consensys/gnark v0.12.0
-	github.com/consensys/gnark-crypto v0.16.0
+	github.com/consensys/gnark-crypto v0.17.0
 	github.com/fxamacker/cbor/v2 v2.7.0
 	github.com/ugorji/go/codec v1.2.12
 	gopkg.in/yaml.v3 v3.0.1
@@ -44,12 +44,14 @@ require (
 	github.com/bits-and-blooms/bitset v1.20.0 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/consensys/bavard v0.1.30 // indirect
 	github.com/consensys/bavard v0.1.27 // indirect
 	github.com/containerd/containerd v1.7.18 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/containerd/platforms v0.2.1 // indirect
 	github.com/cpuguy83/dockercfg v0.3.2 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.5 // indirect
+	github.com/crate-crypto/go-kzg-4844 v1.1.0 // indirect
 	github.com/crate-crypto/go-ipa v0.0.0-20240724233137-53bbb0ceb27a // indirect
 	github.com/crate-crypto/go-kzg-4844 v1.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
@@ -71,6 +73,9 @@ require (
 	github.com/google/pprof v0.0.0-20240727154555-813a5fbdbec8 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.1 // indirect
+	github.com/holiman/uint256 v1.2.4 // indirect
+	github.com/ingonyama-zk/icicle/v3 v3.1.1-0.20241118092657-fccdb2f0921b // indirect
+	github.com/klauspost/compress v1.17.7 // indirect
 	github.com/holiman/uint256 v1.3.2 // indirect
 	github.com/ingonyama-zk/icicle/v3 v3.1.1-0.20241118092657-fccdb2f0921b // indirect
 	github.com/klauspost/compress v1.17.9 // indirect
@@ -105,6 +110,7 @@ require (
 	github.com/shirou/gopsutil/v3 v3.23.12 // indirect
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
 	github.com/shurcooL/graphql v0.0.0-20230722043721-ed46e5a46466 // indirect
+	github.com/supranational/blst v0.3.11 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/stretchr/testify v1.10.0 // indirect
 	github.com/supranational/blst v0.3.13 // indirect
@@ -121,6 +127,9 @@ require (
 	go.opentelemetry.io/otel/trace v1.24.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
+	golang.org/x/net v0.24.0 // indirect
+	golang.org/x/sync v0.11.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
 	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948 // indirect
 	golang.org/x/net v0.34.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect

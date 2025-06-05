@@ -4,13 +4,10 @@ pub mod sp1_aggregator;
 use std::fmt::Display;
 
 use lambdaworks_crypto::merkle_tree::traits::IsMerkleTreeBackend;
-use risc0_aggregator::{
-    AlignedRisc0VerificationError, Risc0AggregationError, Risc0ProofReceiptAndImageId,
-};
+use risc0_aggregator::{Risc0AggregationError, Risc0ProofReceiptAndImageId};
 use sha3::{Digest, Keccak256};
-use sp1_aggregator::{
-    AlignedSP1VerificationError, SP1AggregationError, SP1ProofWithPubValuesAndElf,
-};
+use sp1_aggregator::{SP1AggregationError, SP1ProofWithPubValuesAndElf};
+use tracing::info;
 
 #[derive(Clone, Debug)]
 pub enum ZKVMEngine {
@@ -53,15 +50,18 @@ impl ZKVMEngine {
     /// - The aggregated [`AlignedProof`], representing the combined proof
     /// - The Merkle root computed within the ZKVM, exposed as a public input
     ///
-    /// This function performs proof aggregation and ensures the resulting Merkle root
-    /// can be independently verified by external systems.
+    /// This function performs multi-level proof aggregation. It splits the input proofs into chunks of
+    /// `proofs_per_chunk`` and uses the `user_proofs_aggregator` to aggregate the proofs.
+    /// Then, the `chunk_aggregator` takes the resulting proofs and their corresponding leaves commitments
+    /// to produce the final aggregated proof.
     pub fn aggregate_proofs(
         &self,
         proofs: Vec<AlignedProof>,
+        proofs_per_chunk: u16,
     ) -> Result<(AlignedProof, [u8; 32]), ProofAggregationError> {
         let res = match self {
             ZKVMEngine::SP1 => {
-                let proofs = proofs
+                let proofs: Vec<SP1ProofWithPubValuesAndElf> = proofs
                     .into_iter()
                     // Fetcher already filtered for SP1
                     // We do this for type casting, as to avoid using generics
@@ -72,7 +72,27 @@ impl ZKVMEngine {
                     })
                     .collect();
 
-                let mut agg_proof = sp1_aggregator::aggregate_proofs(proofs)
+                let chunks = proofs.chunks(proofs_per_chunk as usize);
+                info!(
+                    "Total proofs to aggregate {}. They aggregation will be performed in {} chunks (i.e {} proofs per chunk)",
+                    proofs.len(),
+                    chunks.len(),
+                    proofs_per_chunk,
+                );
+
+                let mut agg_proofs: Vec<(SP1ProofWithPubValuesAndElf, Vec<[u8; 32]>)> = vec![];
+                for (i, chunk) in chunks.enumerate() {
+                    let leaves_commitment =
+                        chunk.iter().map(|e| e.hash_vk_and_pub_inputs()).collect();
+                    let agg_proof = sp1_aggregator::run_user_proofs_aggregator(chunk)
+                        .map_err(ProofAggregationError::SP1Aggregation)?;
+                    agg_proofs.push((agg_proof, leaves_commitment));
+
+                    info!("Chunk number {} has been aggregated", i);
+                }
+
+                info!("All chunks have been aggregated, performing last aggregation...");
+                let mut agg_proof = sp1_aggregator::run_chunk_aggregator(&agg_proofs)
                     .map_err(ProofAggregationError::SP1Aggregation)?;
 
                 let merkle_root: [u8; 32] = agg_proof
@@ -83,7 +103,7 @@ impl ZKVMEngine {
                 (AlignedProof::SP1(agg_proof.into()), merkle_root)
             }
             ZKVMEngine::RISC0 => {
-                let proofs = proofs
+                let proofs: Vec<Risc0ProofReceiptAndImageId> = proofs
                     .into_iter()
                     // Fetcher already filtered for Risc0
                     // We do this for type casting, as to avoid using generics
@@ -94,7 +114,29 @@ impl ZKVMEngine {
                     })
                     .collect();
 
-                let agg_proof = risc0_aggregator::aggregate_proofs(proofs)
+                let chunks = proofs.chunks(proofs_per_chunk as usize);
+                info!(
+                    "Total proofs to aggregate {}. They aggregation will be performed in {} chunks (i.e {} proofs per chunk)",
+                    proofs.len(),
+                    chunks.len(),
+                    proofs_per_chunk,
+                );
+
+                let mut agg_proofs: Vec<(Risc0ProofReceiptAndImageId, Vec<[u8; 32]>)> = vec![];
+                for (i, chunk) in chunks.enumerate() {
+                    let leaves_commitment = chunk
+                        .iter()
+                        .map(|e| e.hash_image_id_and_public_inputs())
+                        .collect();
+                    let agg_proof = risc0_aggregator::run_user_proofs_aggregator(chunk)
+                        .map_err(ProofAggregationError::Risc0Aggregation)?;
+                    agg_proofs.push((agg_proof, leaves_commitment));
+
+                    info!("Chunk number {} has been aggregated", i);
+                }
+
+                info!("All chunks have been aggregated, performing last aggregation...");
+                let agg_proof = risc0_aggregator::run_chunk_aggregator(&agg_proofs)
                     .map_err(ProofAggregationError::Risc0Aggregation)?;
 
                 // Note: journal.decode() won't work here as risc0 deserializer works under u32 words
@@ -171,26 +213,5 @@ impl IsMerkleTreeBackend for AlignedProof {
             hasher.update(child_1);
         }
         hasher.finalize().into()
-    }
-}
-
-#[derive(Debug)]
-pub enum AlignedVerificationError {
-    Sp1(AlignedSP1VerificationError),
-    Risc0(AlignedRisc0VerificationError),
-}
-
-impl AlignedProof {
-    pub fn verify(&self) -> Result<(), AlignedVerificationError> {
-        match self {
-            AlignedProof::SP1(proof) => sp1_aggregator::verify(proof).map_err(
-                |arg0: sp1_aggregator::AlignedSP1VerificationError| {
-                    AlignedVerificationError::Sp1(arg0)
-                },
-            ),
-            AlignedProof::Risc0(proof) => {
-                risc0_aggregator::verify(proof).map_err(AlignedVerificationError::Risc0)
-            }
-        }
     }
 }
