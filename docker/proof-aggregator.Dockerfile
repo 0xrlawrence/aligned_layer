@@ -4,6 +4,7 @@ RUN apt update -y && apt install -y gcc
 
 COPY crates /aligned_layer/crates/
 COPY aggregation_mode /aligned_layer/aggregation_mode/
+WORKDIR /aligned_layer
 RUN cargo build --manifest-path ./aggregation_mode/Cargo.toml --features prove --release --bin proof_aggregator_cpu
 
 FROM debian:bookworm-slim AS final
