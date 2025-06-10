@@ -1,6 +1,8 @@
 FROM ghcr.io/yetanotherco/aligned_layer/aligned_base:latest AS base
 
-RUN apt update -y && apt install -y gcc docker.io
+RUN apt update -y && apt install -y gcc docker.io && \
+    groupadd docker || true && \
+    usermod -aG docker r
 
 # Install SP1 toolchain
 RUN curl -L https://sp1up.succinct.xyz | bash -s -- -y
