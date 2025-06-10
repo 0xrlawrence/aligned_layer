@@ -2,8 +2,9 @@ FROM ghcr.io/yetanotherco/aligned_layer/aligned_base:latest AS base
 
 RUN apt update -y && apt install -y gcc
 
-WORKDIR /aligned_layer/aggregation_mode/
-RUN cargo build --features prove --release --bin proof_aggregator_cpu
+COPY crates /aligned_layer/crates/
+COPY aggregation_mode /aligned_layer/aggregation_mode/
+RUN cargo build --manifest-path ./aggregation_mode/Cargo.toml --features prove --release --bin proof_aggregator_cpu
 
 FROM debian:bookworm-slim AS final
 
