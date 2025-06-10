@@ -1178,19 +1178,19 @@ docker_verify_proof_submission_success:
 		'
 
 docker_proof_aggregator_run_sp1:
-	docker exec $(shell docker ps | grep proof_aggregator | awk '{print $$1}') \
+	docker exec $(shell docker ps | grep proof-aggregator | awk '{print $$1}') \
 	sh -c 'AGGREGATOR=sp1 \
 	/aligned_layer/proof_aggregator_cpu /aligned_layer/config-files/config-proof-aggregator-docker.yaml \
 	&& echo "{\"last_aggregated_block\":0}" > config-files/proof-aggregator.last_aggregated_block.json'
 
 docker_proof_aggregator_run_risc0:
-	docker exec $(shell docker ps | grep proof_aggregator | awk '{print $$1}') \
+	docker exec $(shell docker ps | grep proof-aggregator | awk '{print $$1}') \
 	sh -c 'AGGREGATOR=risc0 \
 	/aligned_layer/proof_aggregator_cpu /aligned_layer/config-files/config-proof-aggregator-docker.yaml \
 	&& echo "{\"last_aggregated_block\":0}" > config-files/proof-aggregator.last_aggregated_block.json'
 
 docker_proof_aggregator_verify:
-	@(docker logs $$(docker ps | grep proof_aggregator | awk '{print $$1}') | grep -q "Error while aggregating and submitting proofs" && exit 1) || exit 0
+	@(docker logs $$(docker ps | grep proof-aggregator | awk '{print $$1}') | grep -q "Error while aggregating and submitting proofs" && exit 1) || exit 0
 
 docker_attach_foundry:
 	docker exec -ti $(shell docker ps | grep anvil | awk '{print $$1}') /bin/bash
@@ -1208,7 +1208,7 @@ docker_attach_batcher:
 	docker exec -ti $(shell docker ps | grep batcher | awk '{print $$1}') /bin/bash
 
 docker_attach_proof_aggregator:
-	docker exec -ti $(shell docker ps | grep batcher | awk '{print $$1}') /bin/bash
+	docker exec -ti $(shell docker ps | grep proof-aggregator | awk '{print $$1}') /bin/bash
 
 docker_logs_anvil:
 	docker compose -f docker-compose.yaml logs anvil -f

@@ -118,8 +118,8 @@ services:
     profiles:
       - batcher
   
-  proof_aggregator:
-    image: ghcr.io/yetanotherco/aligned_layer/proof_aggregator:latest
+  proof-aggregator:
+    image: ghcr.io/yetanotherco/aligned_layer/proof-aggregator:latest
     build:
       context: .
       dockerfile: docker/proof-aggregator.Dockerfile
