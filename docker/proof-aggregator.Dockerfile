@@ -26,4 +26,6 @@ COPY ./config-files/anvil.proof-aggregator.ecdsa.key.json ./config-files/
 
 RUN apt update -y && apt install -y libssl-dev ca-certificates
 
-CMD ["sh"]
+# Leave it in the background as this container is used to exec the proof_aggregator binary
+CMD ["sleep","infinity"]
+
