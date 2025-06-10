@@ -117,6 +117,14 @@ services:
       dockerfile: docker/batcher.Dockerfile
     profiles:
       - batcher
+  
+  proof_aggregator:
+    image: ghcr.io/yetanotherco/aligned_layer/proof_aggregator:latest
+    build:
+      context: .
+      dockerfile: docker/proof-aggregator.Dockerfile
+    profiles:
+      - proof-aggregator
 
   aligned_base:
     image: ghcr.io/yetanotherco/aligned_layer/aligned_base:latest
