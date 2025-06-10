@@ -7,7 +7,7 @@ RUN cargo build --features prove --release --bin proof_aggregator_cpu
 
 FROM debian:bookworm-slim AS final
 
-COPY --from=base /aligned_layer/aggregation_mode/target/release/ /aligned_layer/proof_aggregator_cpu
+COPY --from=base /aligned_layer/aggregation_mode/target/release/proof_aggregator_cpu /aligned_layer/proof_aggregator_cpu
 COPY ./config-files/config-proof-aggregator-docker.yaml ./config-files/
 COPY ./config-files/anvil.proof-aggregator.ecdsa.key.json ./config-files/
 
