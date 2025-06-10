@@ -21,8 +21,8 @@ RUN IN_DOCKER=true cargo build --manifest-path ./aggregation_mode/Cargo.toml --f
 FROM debian:bookworm-slim AS final
 
 COPY --from=base /aligned_layer/aggregation_mode/target/release/proof_aggregator_cpu /aligned_layer/proof_aggregator_cpu
-COPY ./config-files/config-proof-aggregator-docker.yaml ./config-files/
-COPY ./config-files/anvil.proof-aggregator.ecdsa.key.json ./config-files/
+COPY config-files/config-proof-aggregator-docker.yaml /aligned_layer/config-files/
+COPY config-files/anvil.proof-aggregator.ecdsa.key.json /aligned_layer/config-files/
 
 RUN apt update -y && apt install -y libssl-dev ca-certificates
 
