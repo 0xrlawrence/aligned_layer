@@ -25,3 +25,5 @@ COPY ./config-files/config-proof-aggregator-docker.yaml ./config-files/
 COPY ./config-files/anvil.proof-aggregator.ecdsa.key.json ./config-files/
 
 RUN apt update -y && apt install -y libssl-dev ca-certificates
+
+CMD ["sh"]
