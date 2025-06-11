@@ -16,7 +16,10 @@ WORKDIR /aligned_layer
 
 RUN IN_DOCKER=true cargo build --manifest-path ./aggregation_mode/Cargo.toml --features prove --release --bin proof_aggregator_cpu
 
-FROM docker:24.0.7-dind AS final
+FROM docker:28.2.2-cli AS final
+
+RUN apt update -y && apt install -y libssl-dev ca-certificates
+
 
 COPY --from=base /aligned_layer/aggregation_mode/target/release/proof_aggregator_cpu /aligned_layer/proof_aggregator_cpu
 COPY config-files/config-proof-aggregator-docker.yaml /aligned_layer/config-files/
