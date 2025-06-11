@@ -1179,7 +1179,9 @@ docker_verify_proof_submission_success:
 
 docker_proof_aggregator_run_sp1:
 	docker exec $(shell docker ps | grep proof-aggregator | awk '{print $$1}') \
-	sh -c 'docker info'
+	sh -c 'RUST_BACKTRACE=1 AGGREGATOR=sp1 \
+	/aligned_layer/proof_aggregator_cpu /aligned_layer/config-files/config-proof-aggregator-docker.yaml \
+	&& echo "{\"last_aggregated_block\":0}" > config-files/proof-aggregator.last_aggregated_block.json'
 
 docker_proof_aggregator_run_risc0:
 	docker exec $(shell docker ps | grep proof-aggregator | awk '{print $$1}') \
