@@ -23,8 +23,6 @@ COPY config-files/config-proof-aggregator-docker.yaml /aligned_layer/config-file
 COPY config-files/proof-aggregator.last_aggregated_block.json /aligned_layer/config-files/
 COPY config-files/anvil.proof-aggregator.ecdsa.key.json /aligned_layer/config-files/
 
-RUN apt update -y && apt install -y libssl-dev ca-certificates
-
 # Leave it in the background as this container is used to exec the proof_aggregator binary
 CMD ["sleep","infinity"]
 
