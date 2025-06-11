@@ -1,9 +1,5 @@
 FROM ghcr.io/yetanotherco/aligned_layer/aligned_base:latest AS base
 
-RUN apt update -y && apt install -y gcc docker.io && \
-    groupadd docker || true && \
-    usermod -aG docker root
-
 # Install SP1 toolchain
 RUN curl -L https://sp1up.succinct.xyz | bash -s -- -y
 ENV PATH="/root/.sp1/bin:${PATH}"
@@ -20,7 +16,7 @@ WORKDIR /aligned_layer
 
 RUN IN_DOCKER=true cargo build --manifest-path ./aggregation_mode/Cargo.toml --features prove --release --bin proof_aggregator_cpu
 
-FROM debian:bookworm-slim AS final
+FROM docker:24.0.7-dind AS final
 
 COPY --from=base /aligned_layer/aggregation_mode/target/release/proof_aggregator_cpu /aligned_layer/proof_aggregator_cpu
 COPY config-files/config-proof-aggregator-docker.yaml /aligned_layer/config-files/
