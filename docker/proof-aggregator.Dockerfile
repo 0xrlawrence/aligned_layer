@@ -40,10 +40,6 @@ RUN apt-get update && apt-get install -y \
 # Note, we don't need to install docker-ce and containerd.io as we pass the docker engine socket via docker volume
 RUN apt-get install docker-ce-cli docker-buildx-plugin docker-compose-plugin -y
 
-RUN groupadd docker
-RUN usermod -aG docker $USER
-RUN newgrp docker
-
 COPY --from=base /aligned_layer/aggregation_mode/target/release/proof_aggregator_cpu /aligned_layer/proof_aggregator_cpu
 COPY config-files/config-proof-aggregator-docker.yaml /aligned_layer/config-files/
 COPY config-files/proof-aggregator.last_aggregated_block.json /aligned_layer/config-files/
