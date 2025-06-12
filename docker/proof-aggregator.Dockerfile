@@ -20,20 +20,25 @@ FROM debian:bookworm-slim AS final
 
 RUN apt update -y && apt install -y libssl-dev ca-certificates
 
-# Install docker for SP1 and Risc0 wrapping to snark
-RUN apt-get update
-RUN apt-get install ca-certificates curl
-RUN install -m 0755 -d /etc/apt/keyrings
-RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-RUN chmod a+r /etc/apt/keyrings/docker.asc
-RUN echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
-  $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
-tee /etc/apt/sources.list.d/docker.list > /dev/null
-RUN apt-get update
+
+# Install required tools and set up Docker repository
+# Installing docker is necessary for SP1 and Risc0 wrapping to snark
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    curl \
+    gnupg \
+    lsb-release && \
+    install -m 0755 -d /etc/apt/keyrings && \
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc && \
+    chmod a+r /etc/apt/keyrings/docker.asc && \
+    echo \
+    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian \
+    $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+    tee /etc/apt/sources.list.d/docker.list > /dev/null && \
+    apt-get update
 
 # Note, we don't need to install docker-ce and containerd.io as we pass the docker engine socket via docker volume
-RUN apt-get install docker-ce-cli docker-buildx-plugin docker-compose-plugin
+RUN apt-get install docker-ce-cli docker-buildx-plugin docker-compose-plugin -y
 
 RUN groupadd docker
 RUN usermod -aG docker $USER
