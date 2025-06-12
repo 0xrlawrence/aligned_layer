@@ -16,9 +16,28 @@ WORKDIR /aligned_layer
 
 RUN IN_DOCKER=true cargo build --manifest-path ./aggregation_mode/Cargo.toml --features prove --release --bin proof_aggregator_cpu
 
-FROM docker:28.2.2-cli AS final
+FROM debian:bookworm-slim AS final
 
-RUN apk add --no-cache openssl-dev ca-certificates
+RUN apt update -y && apt install -y libssl-dev ca-certificates
+
+# Install docker for SP1 and Risc0 wrapping to snark
+RUN apt-get update
+RUN apt-get install ca-certificates curl
+RUN install -m 0755 -d /etc/apt/keyrings
+RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+RUN chmod a+r /etc/apt/keyrings/docker.asc
+RUN echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
+tee /etc/apt/sources.list.d/docker.list > /dev/null
+RUN apt-get update
+
+# Note, we don't need to install docker-ce and containerd.io as we pass the docker engine socket via docker volume
+RUN apt-get install docker-ce-cli docker-buildx-plugin docker-compose-plugin
+
+RUN groupadd docker
+RUN usermod -aG docker $USER
+RUN newgrp docker
 
 COPY --from=base /aligned_layer/aggregation_mode/target/release/proof_aggregator_cpu /aligned_layer/proof_aggregator_cpu
 COPY config-files/config-proof-aggregator-docker.yaml /aligned_layer/config-files/
