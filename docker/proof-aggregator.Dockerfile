@@ -18,8 +18,7 @@ RUN IN_DOCKER=true cargo build --manifest-path ./aggregation_mode/Cargo.toml --f
 
 FROM docker:28.2.2-cli AS final
 
-RUN apt update -y && apt install -y libssl-dev ca-certificates
-
+RUN apk add --no-cache openssl-dev ca-certificates
 
 COPY --from=base /aligned_layer/aggregation_mode/target/release/proof_aggregator_cpu /aligned_layer/proof_aggregator_cpu
 COPY config-files/config-proof-aggregator-docker.yaml /aligned_layer/config-files/
