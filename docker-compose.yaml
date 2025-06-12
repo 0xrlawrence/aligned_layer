@@ -124,9 +124,9 @@ services:
       context: .
       dockerfile: docker/proof-aggregator.Dockerfile
     # Privileged so that it can run docker in docker (necessary for proving)
-    privileged: true
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+    # privileged: true
+    # volumes:
+    #   - /var/run/docker.sock:/var/run/docker.sock
     profiles:
       - proof-aggregator
 
