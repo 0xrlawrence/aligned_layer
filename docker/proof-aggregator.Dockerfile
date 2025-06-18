@@ -20,7 +20,6 @@ FROM debian:bookworm-slim AS final
 
 RUN apt update -y && apt install -y libssl-dev ca-certificates
 
-
 # Install required tools and set up Docker repository
 # Installing docker is necessary for SP1 and Risc0 wrapping to snark
 RUN apt-get update && apt-get install -y \
@@ -43,6 +42,8 @@ COPY --from=base /aligned_layer/aggregation_mode/target/release/proof_aggregator
 COPY config-files/config-proof-aggregator-docker.yaml /aligned_layer/config-files/
 COPY config-files/proof-aggregator.last_aggregated_block.json /aligned_layer/config-files/
 COPY config-files/anvil.proof-aggregator.ecdsa.key.json /aligned_layer/config-files/
+
+RUN docker info
 
 # Leave it in the background as this container is used to exec the proof_aggregator binary
 CMD ["sleep","infinity"]
