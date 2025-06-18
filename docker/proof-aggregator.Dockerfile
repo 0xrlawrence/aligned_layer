@@ -15,7 +15,7 @@ COPY aggregation_mode /aligned_layer/aggregation_mode/
 WORKDIR /aligned_layer
 
 RUN IN_DOCKER=true cargo build --manifest-path ./aggregation_mode/Cargo.toml --features prove --release --bin proof_aggregator_cpu
-RUN cd aggregation_mode && ./scripts/build_programs.sh
+RUN cd aggregation_mode && IN_DOCKER=true ./scripts/build_programs.sh
 
 FROM debian:bookworm-slim AS final
 
