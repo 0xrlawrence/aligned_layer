@@ -282,89 +282,6 @@ impl Batcher {
         }
     }
 
-    // Helper methods for user_states operations with per-address locking
-    
-    async fn get_user_nonce(&self, addr: &Address) -> Option<U256> {
-        let user_state = self.user_states.get(addr)?;
-        let user_state_guard = user_state.lock().await;
-        Some(user_state_guard.nonce)
-    }
-
-    async fn get_user_last_max_fee_limit(&self, addr: &Address) -> Option<U256> {
-        let user_state = self.user_states.get(addr)?;
-        let user_state_guard = user_state.lock().await;
-        Some(user_state_guard.last_max_fee_limit)
-    }
-
-    async fn get_user_total_fees_in_queue(&self, addr: &Address) -> Option<U256> {
-        let user_state = self.user_states.get(addr)?;
-        let user_state_guard = user_state.lock().await;
-        Some(user_state_guard.total_fees_in_queue)
-    }
-
-    async fn get_user_proof_count(&self, addr: &Address) -> Option<usize> {
-        let user_state = self.user_states.get(addr)?;
-        let user_state_guard = user_state.lock().await;
-        Some(user_state_guard.proofs_in_batch)
-    }
-
-    async fn update_user_nonce(&self, addr: &Address, new_nonce: U256) -> Option<U256> {
-        let user_state = self.user_states.get(addr)?;
-        let mut user_state_guard = user_state.lock().await;
-        user_state_guard.nonce = new_nonce;
-        Some(new_nonce)
-    }
-
-    async fn update_user_max_fee_limit(&self, addr: &Address, new_max_fee_limit: U256) -> Option<U256> {
-        let user_state = self.user_states.get(addr)?;
-        let mut user_state_guard = user_state.lock().await;
-        user_state_guard.last_max_fee_limit = new_max_fee_limit;
-        Some(new_max_fee_limit)
-    }
-
-    async fn update_user_proof_count(&self, addr: &Address, new_proof_count: usize) -> Option<usize> {
-        let user_state = self.user_states.get(addr)?;
-        let mut user_state_guard = user_state.lock().await;
-        user_state_guard.proofs_in_batch = new_proof_count;
-        Some(new_proof_count)
-    }
-
-    async fn update_user_total_fees_in_queue(&self, addr: &Address, new_total_fees_in_queue: U256) -> Option<U256> {
-        let user_state = self.user_states.get(addr)?;
-        let mut user_state_guard = user_state.lock().await;
-        user_state_guard.total_fees_in_queue = new_total_fees_in_queue;
-        Some(new_total_fees_in_queue)
-    }
-
-    async fn update_user_total_fees_in_queue_of_replacement_message(
-        &self,
-        addr: &Address,
-        original_max_fee: U256,
-        new_max_fee: U256,
-    ) -> Option<U256> {
-        let user_state = self.user_states.get(addr)?;
-        let mut user_state_guard = user_state.lock().await;
-        let fee_difference = new_max_fee - original_max_fee;
-        user_state_guard.total_fees_in_queue += fee_difference;
-        Some(user_state_guard.total_fees_in_queue)
-    }
-
-    async fn update_user_state(
-        &self,
-        addr: &Address,
-        new_nonce: U256,
-        new_max_fee_limit: U256,
-        new_proof_count: usize,
-        new_total_fees_in_queue: U256,
-    ) -> Option<(U256, U256, usize, U256)> {
-        let user_state = self.user_states.get(addr)?;
-        let mut user_state_guard = user_state.lock().await;
-        user_state_guard.nonce = new_nonce;
-        user_state_guard.last_max_fee_limit = new_max_fee_limit;
-        user_state_guard.proofs_in_batch = new_proof_count;
-        user_state_guard.total_fees_in_queue = new_total_fees_in_queue;
-        Some((new_nonce, new_max_fee_limit, new_proof_count, new_total_fees_in_queue))
-    }
 
     fn get_user_min_fee_in_batch(&self, addr: &Address, batch_queue: &types::batch_queue::BatchQueue) -> U256 {
         batch_queue
@@ -699,7 +616,16 @@ impl Batcher {
             address = replacement_addr;
         }
 
-        let cached_user_nonce = self.get_user_nonce(&address).await;
+        let cached_user_nonce = {
+            let user_state = self.user_states.get(&address);
+            match user_state {
+                Some(user_state) => {
+                    let user_state_guard = user_state.lock().await;
+                    Some(user_state_guard.nonce)
+                }
+                None => None,
+            }
+        };
 
         let user_nonce = if let Some(user_nonce) = cached_user_nonce {
             user_nonce
@@ -887,7 +813,17 @@ impl Batcher {
         };
 
         let msg_max_fee = nonced_verification_data.max_fee;
-        let Some(user_last_max_fee_limit) = self.get_user_last_max_fee_limit(&addr).await else {
+        let user_last_max_fee_limit = {
+            let user_state = self.user_states.get(&addr);
+            match user_state {
+                Some(user_state) => {
+                    let user_state_guard = user_state.lock().await;
+                    Some(user_state_guard.last_max_fee_limit)
+                }
+                None => None,
+            }
+        };
+        let Some(user_last_max_fee_limit) = user_last_max_fee_limit else {
             send_message(
                 ws_conn_sink.clone(),
                 SubmitProofResponseMessage::AddToBatchError,
@@ -897,7 +833,17 @@ impl Batcher {
             return Ok(());
         };
 
-        let Some(user_accumulated_fee) = self.get_user_total_fees_in_queue(&addr).await else {
+        let user_accumulated_fee = {
+            let user_state = self.user_states.get(&addr);
+            match user_state {
+                Some(user_state) => {
+                    let user_state_guard = user_state.lock().await;
+                    Some(user_state_guard.total_fees_in_queue)
+                }
+                None => None,
+            }
+        };
+        let Some(user_accumulated_fee) = user_accumulated_fee else {
             send_message(
                 ws_conn_sink.clone(),
                 SubmitProofResponseMessage::AddToBatchError,
@@ -917,7 +863,16 @@ impl Batcher {
             return Ok(());
         }
 
-        let cached_user_nonce = self.get_user_nonce(&addr).await;
+        let cached_user_nonce = {
+            let user_state = self.user_states.get(&addr);
+            match user_state {
+                Some(user_state) => {
+                    let user_state_guard = user_state.lock().await;
+                    Some(user_state_guard.nonce)
+                }
+                None => None,
+            }
+        };
 
         let Some(expected_nonce) = cached_user_nonce else {
             error!("Failed to get cached user nonce: User not found in user states, but it should have been already inserted");
@@ -1171,39 +1126,46 @@ impl Batcher {
 
         // update max_fee_limit
         let updated_max_fee_limit_in_batch = self.get_user_min_fee_in_batch(&addr, &batch_state_lock.batch_queue);
-        if self
-            .update_user_max_fee_limit(&addr, updated_max_fee_limit_in_batch)
-            .await
-            .is_none()
         {
-            std::mem::drop(batch_state_lock);
-            warn!("User state for address {addr:?} was not present in batcher user states, but it should be");
-            send_message(
-                ws_conn_sink.clone(),
-                SubmitProofResponseMessage::AddToBatchError,
-            )
-            .await;
-            return;
-        };
+            let user_state = self.user_states.get(&addr);
+            match user_state {
+                Some(user_state) => {
+                    let mut user_state_guard = user_state.lock().await;
+                    user_state_guard.last_max_fee_limit = updated_max_fee_limit_in_batch;
+                }
+                None => {
+                    std::mem::drop(batch_state_lock);
+                    warn!("User state for address {addr:?} was not present in batcher user states, but it should be");
+                    send_message(
+                        ws_conn_sink.clone(),
+                        SubmitProofResponseMessage::AddToBatchError,
+                    )
+                    .await;
+                    return;
+                }
+            }
+        }
 
         // update total_fees_in_queue
-        if self
-            .update_user_total_fees_in_queue_of_replacement_message(
-                &addr,
-                original_max_fee,
-                replacement_max_fee,
-            )
-            .await
-            .is_none()
         {
-            std::mem::drop(batch_state_lock);
-            warn!("User state for address {addr:?} was not present in batcher user states, but it should be");
-            send_message(
-                ws_conn_sink.clone(),
-                SubmitProofResponseMessage::AddToBatchError,
-            )
-            .await;
-        };
+            let user_state = self.user_states.get(&addr);
+            match user_state {
+                Some(user_state) => {
+                    let mut user_state_guard = user_state.lock().await;
+                    let fee_difference = replacement_max_fee - original_max_fee;
+                    user_state_guard.total_fees_in_queue += fee_difference;
+                }
+                None => {
+                    std::mem::drop(batch_state_lock);
+                    warn!("User state for address {addr:?} was not present in batcher user states, but it should be");
+                    send_message(
+                        ws_conn_sink.clone(),
+                        SubmitProofResponseMessage::AddToBatchError,
+                    )
+                    .await;
+                }
+            }
+        }
     }
 
     async fn disabled_verifiers(&self) -> Result<U256, ContractError<SignerMiddlewareT>> {
@@ -1275,40 +1237,26 @@ impl Batcher {
 
         info!("Current batch queue length: {}", queue_len);
 
-        let Some(user_proof_count) = self.get_user_proof_count(&proof_submitter_addr).await else {
-            error!("User state of address {proof_submitter_addr} was not found when trying to update user state. This user state should have been present");
-            std::mem::drop(batch_state_lock);
-            return Err(BatcherError::AddressNotFoundInUserStates(
-                proof_submitter_addr,
-            ));
-        };
-
-        let Some(current_total_fees_in_queue) = self.get_user_total_fees_in_queue(&proof_submitter_addr).await else {
-            error!("User state of address {proof_submitter_addr} was not found when trying to update user state. This user state should have been present");
-            std::mem::drop(batch_state_lock);
-            return Err(BatcherError::AddressNotFoundInUserStates(
-                proof_submitter_addr,
-            ));
-        };
-
         // User state is updated
-        if self
-            .update_user_state(
-                &proof_submitter_addr,
-                nonce + U256::one(),
-                max_fee,
-                user_proof_count + 1,
-                current_total_fees_in_queue + max_fee,
-            )
-            .await
-            .is_none()
         {
-            error!("User state of address {proof_submitter_addr} was not found when trying to update user state. This user state should have been present");
-            std::mem::drop(batch_state_lock);
-            return Err(BatcherError::AddressNotFoundInUserStates(
-                proof_submitter_addr,
-            ));
-        };
+            let user_state = self.user_states.get(&proof_submitter_addr);
+            match user_state {
+                Some(user_state) => {
+                    let mut user_state_guard = user_state.lock().await;
+                    user_state_guard.nonce = nonce + U256::one();
+                    user_state_guard.last_max_fee_limit = max_fee;
+                    user_state_guard.proofs_in_batch += 1;
+                    user_state_guard.total_fees_in_queue += max_fee;
+                }
+                None => {
+                    error!("User state of address {proof_submitter_addr} was not found when trying to update user state. This user state should have been present");
+                    std::mem::drop(batch_state_lock);
+                    return Err(BatcherError::AddressNotFoundInUserStates(
+                        proof_submitter_addr,
+                    ));
+                }
+            }
+        }
 
         Ok(())
     }
@@ -1420,21 +1368,22 @@ impl Batcher {
             // informative error.
 
             // Now we update the user states related to the batch (proof count in batch and min fee in batch)
-            self.update_user_proof_count(addr, *proof_count)
-                .await
-                .ok_or(BatcherError::QueueRemoveError(
-                    "Could not update_user_proof_count".into(),
-                ))?;
-            self.update_user_max_fee_limit(addr, *max_fee_limit)
-                .await
-                .ok_or(BatcherError::QueueRemoveError(
-                    "Could not update_user_max_fee_limit".into(),
-                ))?;
-            self.update_user_total_fees_in_queue(addr, *total_fees_in_queue)
-                .await
-                .ok_or(BatcherError::QueueRemoveError(
-                    "Could not update_user_total_fees_in_queue".into(),
-                ))?;
+            {
+                let user_state = self.user_states.get(addr);
+                match user_state {
+                    Some(user_state) => {
+                        let mut user_state_guard = user_state.lock().await;
+                        user_state_guard.proofs_in_batch = *proof_count;
+                        user_state_guard.last_max_fee_limit = *max_fee_limit;
+                        user_state_guard.total_fees_in_queue = *total_fees_in_queue;
+                    }
+                    None => {
+                        return Err(BatcherError::QueueRemoveError(
+                            "Could not update user state".into(),
+                        ));
+                    }
+                }
+            }
         }
 
         // Update metrics
