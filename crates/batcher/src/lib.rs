@@ -282,18 +282,6 @@ impl Batcher {
         }
     }
 
-    fn get_user_min_fee_in_batch(
-        &self,
-        addr: &Address,
-        batch_queue: &types::batch_queue::BatchQueue,
-    ) -> U256 {
-        batch_queue
-            .iter()
-            .filter(|(e, _)| &e.sender == addr)
-            .map(|(e, _)| e.nonced_verification_data.max_fee)
-            .min()
-            .unwrap_or(U256::max_value())
-    }
 
     async fn update_evicted_user_state(
         &self,
@@ -1111,7 +1099,7 @@ impl Batcher {
 
         // update max_fee_limit
         let updated_max_fee_limit_in_batch =
-            self.get_user_min_fee_in_batch(&addr, &batch_state_lock.batch_queue);
+            batch_state_lock.get_user_min_fee_in_batch(&addr);
         {
             let user_state = self.user_states.get(&addr);
             match user_state {
