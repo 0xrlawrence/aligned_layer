@@ -381,7 +381,7 @@ operator_update: ## Update the Operator to the latest version and build it. Para
 	$(GET_SDK_VERSION)
 	@echo "Updating Operator..."
 	@./scripts/fetch_latest_release.sh
-	@make build_operator
+	@make operator_build
 	@./operator/build/aligned-operator --version
 
 operator_valid_marshall_fuzz_macos:
@@ -514,6 +514,9 @@ aligned_uninstall: ## Uninstall Aligned CLI
 
 aligned_install_compiling: ## Install Aligned CLI by compiling from source
 	@cargo install --path crates/cli
+
+build_batcher_client:
+	@cd crates/cli && cargo build --release
 
 __SEND_PROOFS__: ## ____
 
