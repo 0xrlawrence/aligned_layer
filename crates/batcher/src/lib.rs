@@ -295,7 +295,7 @@ impl Batcher {
             .unwrap_or(U256::max_value())
     }
 
-    async fn update_user_state_on_entry_removal(
+    async fn update_evicted_user_state(
         &self,
         removed_entry: &types::batch_queue::BatchQueueEntry,
         batch_queue: &types::batch_queue::BatchQueue,
@@ -937,7 +937,7 @@ impl Batcher {
                     removed_entry.nonced_verification_data.nonce
                 );
 
-                self.update_user_state_on_entry_removal(
+                self.update_evicted_user_state(
                     &removed_entry,
                     &batch_state_lock.batch_queue,
                 )
