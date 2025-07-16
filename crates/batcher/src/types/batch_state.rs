@@ -1,6 +1,4 @@
-use super::{
-    batch_queue::{BatchQueue, BatchQueueEntry},
-};
+use super::batch_queue::{BatchQueue, BatchQueueEntry};
 use ethers::types::{Address, U256};
 use log::debug;
 
@@ -19,7 +17,6 @@ impl BatchState {
         }
     }
 
-
     // GETTERS:
 
     pub(crate) fn get_entry(&self, sender: Address, nonce: U256) -> Option<&BatchQueueEntry> {
@@ -28,7 +25,6 @@ impl BatchState {
             .map(|(entry, _)| entry)
             .find(|entry| entry.sender == sender && entry.nonced_verification_data.nonce == nonce)
     }
-
 
     pub(crate) fn get_user_min_fee_in_batch(&self, addr: &Address) -> U256 {
         self.batch_queue
@@ -39,9 +35,7 @@ impl BatchState {
             .unwrap_or(U256::max_value())
     }
 
-
     // LOGIC:
-
 
     /// Checks if the entry is valid
     /// An entry is valid if there is no entry with the same sender, lower nonce and a lower fee
@@ -65,7 +59,6 @@ impl BatchState {
                 && entry.nonced_verification_data.max_fee < replacement_max_fee
         })
     }
-
 
     pub(crate) fn is_queue_full(&self) -> bool {
         self.batch_queue.len() >= self.max_size

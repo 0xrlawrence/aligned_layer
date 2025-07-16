@@ -17,12 +17,12 @@ use types::batch_state::BatchState;
 use types::user_state::UserState;
 
 use batch_queue::calculate_batch_size;
+use dashmap::DashMap;
 use std::collections::HashMap;
 use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use dashmap::DashMap;
 
 use aligned_sdk::common::constants::{
     ADDITIONAL_SUBMISSION_GAS_COST_PER_PROOF, BATCHER_SUBMISSION_BASE_GAS_COST,
@@ -282,8 +282,11 @@ impl Batcher {
         }
     }
 
-
-    fn get_user_min_fee_in_batch(&self, addr: &Address, batch_queue: &types::batch_queue::BatchQueue) -> U256 {
+    fn get_user_min_fee_in_batch(
+        &self,
+        addr: &Address,
+        batch_queue: &types::batch_queue::BatchQueue,
+    ) -> U256 {
         batch_queue
             .iter()
             .filter(|(e, _)| &e.sender == addr)
@@ -292,7 +295,11 @@ impl Batcher {
             .unwrap_or(U256::max_value())
     }
 
-    async fn update_user_state_on_entry_removal(&self, removed_entry: &types::batch_queue::BatchQueueEntry, batch_queue: &types::batch_queue::BatchQueue) -> Option<()> {
+    async fn update_user_state_on_entry_removal(
+        &self,
+        removed_entry: &types::batch_queue::BatchQueueEntry,
+        batch_queue: &types::batch_queue::BatchQueue,
+    ) -> Option<()> {
         let addr = removed_entry.sender;
 
         let new_last_max_fee_limit = match batch_queue
@@ -316,7 +323,10 @@ impl Batcher {
         Some(())
     }
 
-    fn calculate_new_user_states_data(&self, batch_queue: &types::batch_queue::BatchQueue) -> HashMap<Address, (usize, U256, U256)> {
+    fn calculate_new_user_states_data(
+        &self,
+        batch_queue: &types::batch_queue::BatchQueue,
+    ) -> HashMap<Address, (usize, U256, U256)> {
         let mut updated_user_states = HashMap::new();
         for (entry, _) in batch_queue.iter() {
             let addr = entry.sender;
@@ -762,7 +772,6 @@ impl Batcher {
             }
         }
 
-
         // We don't need a batch state lock here, since if the user locks its funds
         // after the check, some blocks should pass until he can withdraw.
         // It is safe to do just do this here.
@@ -772,20 +781,19 @@ impl Batcher {
 
         info!("Handling message, locking user state");
 
-
-
         // We acquire the lock first only to query if the user is already present and the lock is dropped.
         // If it was not present, then the user nonce is queried to the Aligned contract.
         // Lastly, we get a lock of the batch state again and insert the user state if it was still missing.
 
         let is_user_in_state = self.user_states.contains_key(&addr);
-        
+
         if !is_user_in_state {
             // We add a dummy user state to grab a lock on the user state
             let dummy_user_state = UserState::new(U256::zero());
-            self.user_states.insert(addr, Arc::new(Mutex::new(dummy_user_state)));
+            self.user_states
+                .insert(addr, Arc::new(Mutex::new(dummy_user_state)));
         }
-        
+
         let Some(user_state_ref) = self.user_states.get(&addr) else {
             error!("This should never happen, user state has previously been inserted if it didn't exist");
             send_message(
@@ -818,7 +826,9 @@ impl Batcher {
                 }
             };
             let user_state = UserState::new(ethereum_user_nonce);
-            self.user_states.entry(addr).or_insert(Arc::new(Mutex::new(user_state)));
+            self.user_states
+                .entry(addr)
+                .or_insert(Arc::new(Mutex::new(user_state)));
         }
 
         // * ---------------------------------------------------*
@@ -986,7 +996,11 @@ impl Batcher {
                     removed_entry.nonced_verification_data.nonce
                 );
 
-                self.update_user_state_on_entry_removal(&removed_entry, &batch_state_lock.batch_queue).await;
+                self.update_user_state_on_entry_removal(
+                    &removed_entry,
+                    &batch_state_lock.batch_queue,
+                )
+                .await;
 
                 if let Some(removed_entry_ws) = removed_entry.messaging_sink {
                     send_message(
@@ -1150,7 +1164,8 @@ impl Batcher {
         );
 
         // update max_fee_limit
-        let updated_max_fee_limit_in_batch = self.get_user_min_fee_in_batch(&addr, &batch_state_lock.batch_queue);
+        let updated_max_fee_limit_in_batch =
+            self.get_user_min_fee_in_batch(&addr, &batch_state_lock.batch_queue);
         {
             let user_state = self.user_states.get(&addr);
             match user_state {
@@ -1381,7 +1396,8 @@ impl Batcher {
         // now we calculate the new user_states
         let new_user_states = self.calculate_new_user_states_data(&batch_state_lock.batch_queue);
 
-        let user_addresses: Vec<Address> = self.user_states.iter().map(|entry| *entry.key()).collect();
+        let user_addresses: Vec<Address> =
+            self.user_states.iter().map(|entry| *entry.key()).collect();
         let default_value = (0, U256::MAX, U256::zero());
         for addr in user_addresses.iter() {
             let (proof_count, max_fee_limit, total_fees_in_queue) =
@@ -1562,8 +1578,10 @@ impl Batcher {
         batch_state_lock.batch_queue.clear();
         self.user_states.clear();
         let nonpaying_user_state = UserState::new(nonpaying_replacement_addr_nonce);
-        self.user_states
-            .insert(nonpaying_replacement_addr, Arc::new(Mutex::new(nonpaying_user_state)));
+        self.user_states.insert(
+            nonpaying_replacement_addr,
+            Arc::new(Mutex::new(nonpaying_user_state)),
+        );
 
         self.metrics.update_queue_metrics(0, 0);
     }
