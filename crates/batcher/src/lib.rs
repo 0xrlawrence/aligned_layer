@@ -937,11 +937,8 @@ impl Batcher {
                     removed_entry.nonced_verification_data.nonce
                 );
 
-                self.update_evicted_user_state(
-                    &removed_entry,
-                    &batch_state_lock.batch_queue,
-                )
-                .await;
+                self.update_evicted_user_state(&removed_entry, &batch_state_lock.batch_queue)
+                    .await;
 
                 if let Some(removed_entry_ws) = removed_entry.messaging_sink {
                     send_message(
