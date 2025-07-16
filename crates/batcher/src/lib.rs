@@ -627,10 +627,10 @@ impl Batcher {
         }
 
         let cached_user_nonce = {
-            let user_state = self.user_states.get(&address);
-            match user_state {
-                Some(user_state) => {
-                    let user_state_guard = user_state.lock().await;
+            let user_state_ref = self.user_states.get(&address);
+            match user_state_ref {
+                Some(user_state_ref) => {
+                    let user_state_guard = user_state_ref.lock().await;
                     Some(user_state_guard.nonce)
                 }
                 None => None,
