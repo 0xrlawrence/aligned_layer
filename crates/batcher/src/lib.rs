@@ -86,7 +86,7 @@ pub struct Batcher {
     service_manager: ServiceManager,
     service_manager_fallback: ServiceManager,
     batch_state: Mutex<BatchState>,
-    user_states: DashMap<Address, Mutex<UserState>>,
+    user_states: DashMap<Address, Arc<Mutex<UserState>>>,
     min_block_interval: u64,
     transaction_wait_timeout: u64,
     max_proof_size: usize,
@@ -229,7 +229,7 @@ impl Batcher {
             let non_paying_user_state = UserState::new(nonpaying_nonce);
             user_states.insert(
                 non_paying_config.replacement.address(),
-                Mutex::new(non_paying_user_state),
+                Arc::new(Mutex::new(non_paying_user_state)),
             );
 
             Some(non_paying_config)
@@ -762,7 +762,6 @@ impl Batcher {
             }
         }
 
-        info!("Handling message");
 
         // We don't need a batch state lock here, since if the user locks its funds
         // after the check, some blocks should pass until he can withdraw.
@@ -771,12 +770,37 @@ impl Batcher {
             return Ok(());
         }
 
+        info!("Handling message, locking user state");
+
+
+
         // We acquire the lock first only to query if the user is already present and the lock is dropped.
         // If it was not present, then the user nonce is queried to the Aligned contract.
         // Lastly, we get a lock of the batch state again and insert the user state if it was still missing.
 
         let is_user_in_state = self.user_states.contains_key(&addr);
+        
+        if !is_user_in_state {
+            // We add a dummy user state to grab a lock on the user state
+            let dummy_user_state = UserState::new(U256::zero());
+            self.user_states.insert(addr, Arc::new(Mutex::new(dummy_user_state)));
+        }
+        
+        let Some(user_state_ref) = self.user_states.get(&addr) else {
+            error!("This should never happen, user state has previously been inserted if it didn't exist");
+            send_message(
+                ws_conn_sink.clone(),
+                SubmitProofResponseMessage::AddToBatchError,
+            )
+            .await;
+            self.metrics.user_error(&["batcher_state_error", ""]);
+            return Ok(());
+        };
 
+        // We acquire the lock on the user state, now everything will be processed sequentially
+        let _user_state_guard = user_state_ref.lock().await;
+
+        // If the user state was not present, we need to get the nonce from the Ethereum contract and update the dummy user state
         if !is_user_in_state {
             let ethereum_user_nonce = match self.get_user_nonce_from_ethereum(addr).await {
                 Ok(ethereum_user_nonce) => ethereum_user_nonce,
@@ -794,7 +818,7 @@ impl Batcher {
                 }
             };
             let user_state = UserState::new(ethereum_user_nonce);
-            self.user_states.entry(addr).or_insert(Mutex::new(user_state));
+            self.user_states.entry(addr).or_insert(Arc::new(Mutex::new(user_state)));
         }
 
         // * ---------------------------------------------------*
@@ -823,6 +847,7 @@ impl Batcher {
                 None => None,
             }
         };
+
         let Some(user_last_max_fee_limit) = user_last_max_fee_limit else {
             send_message(
                 ws_conn_sink.clone(),
@@ -1538,7 +1563,7 @@ impl Batcher {
         self.user_states.clear();
         let nonpaying_user_state = UserState::new(nonpaying_replacement_addr_nonce);
         self.user_states
-            .insert(nonpaying_replacement_addr, Mutex::new(nonpaying_user_state));
+            .insert(nonpaying_replacement_addr, Arc::new(Mutex::new(nonpaying_user_state)));
 
         self.metrics.update_queue_metrics(0, 0);
     }
