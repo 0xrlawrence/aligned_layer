@@ -95,7 +95,7 @@ pub struct Batcher {
     non_paying_config: Option<NonPayingConfig>,
     aggregator_fee_percentage_multiplier: u128,
     aggregator_gas_cost: u128,
-    
+
     // Shared state (Mutex)
     /// The general business rule is:
     /// - User processing can be done in parallel unless a batch creation is happening
@@ -103,8 +103,8 @@ pub struct Batcher {
     /// needs to be stopped, and all user_states locks need to be taken
     batch_state: Mutex<BatchState>,
     user_states: DashMap<Address, Arc<Mutex<UserState>>>,
-    /// When posting a task, this is taken as a write to stop new threads to update 
-    /// user_states, ideally we would want a bigger mutex on the whole user_states, but this can't be done 
+    /// When posting a task, this is taken as a write to stop new threads to update
+    /// user_states, ideally we would want a bigger mutex on the whole user_states, but this can't be done
     batch_processing_lock: RwLock<()>,
 
     last_uploaded_batch_block: Mutex<u64>,
@@ -114,10 +114,8 @@ pub struct Batcher {
     /// the batch creation task
     posting_batch: Mutex<bool>,
 
-
     disabled_verifiers: Mutex<U256>,
-    
-    
+
     // Observability and monitoring
     pub metrics: metrics::BatcherMetrics,
     pub telemetry: TelemetrySender,
@@ -302,7 +300,6 @@ impl Batcher {
             telemetry,
         }
     }
-
 
     async fn update_evicted_user_state(
         &self,
@@ -690,7 +687,7 @@ impl Batcher {
     ) -> Result<(), Error> {
         // Acquire read lock to allow concurrent user processing but block during batch creation
         let _batch_processing_guard = self.batch_processing_lock.read().await;
-        
+
         let msg_nonce = client_msg.verification_data.nonce;
         debug!("Received message with nonce: {msg_nonce:?}");
         self.metrics.received_proofs.inc();
@@ -1122,8 +1119,7 @@ impl Batcher {
         );
 
         // update max_fee_limit
-        let updated_max_fee_limit_in_batch =
-            batch_state_lock.get_user_min_fee_in_batch(&addr);
+        let updated_max_fee_limit_in_batch = batch_state_lock.get_user_min_fee_in_batch(&addr);
         {
             let user_state = self.user_states.get(&addr);
             match user_state {
@@ -1254,8 +1250,8 @@ impl Batcher {
     /// an empty batch, even if the block interval has been reached.
     /// Once the batch meets the conditions for submission, the finalized batch is then passed to the
     /// `finalize_batch` function.
-    /// This function doesn't remove the proofs from the queue.
-    async fn is_batch_ready(
+    /// This function removes the proofs from the queue immediately to avoid race conditions.
+    async fn extract_batch_if_ready(
         &self,
         block_number: u64,
         gas_price: U256,
@@ -1291,9 +1287,12 @@ impl Batcher {
 
         // Set the batch posting flag to true
         *batch_posting = true;
-        let batch_queue_copy = batch_state_lock.batch_queue.clone();
-        let finalized_batch = batch_queue::try_build_batch(
-            batch_queue_copy,
+
+        // PHASE 1: Extract the batch directly from the queue to avoid race conditions
+        let mut batch_state_lock = batch_state_lock; // Make mutable
+        
+        let finalized_batch = batch_queue::extract_batch_directly(
+            &mut batch_state_lock.batch_queue,
             gas_price,
             self.max_batch_byte_size,
             self.max_batch_proof_qty,
@@ -1313,26 +1312,31 @@ impl Batcher {
         })
         .ok()?;
 
+        info!(
+            "Extracted {} proofs from queue for batch processing",
+            finalized_batch.len()
+        );
+
+        // PHASE 1.5: Update user states immediately after batch extraction to make the operation atomic
+        // We assume the batch posting will be successful, so we update user states now
+        if let Err(e) = self.update_user_states_after_batch_extraction(&batch_state_lock).await {
+            error!("Failed to update user states after batch extraction: {:?}", e);
+            // We could potentially put the batch back in the queue here if needed
+            *batch_posting = false;
+            return None;
+        }
+
         Some(finalized_batch)
     }
 
-    /// Takes the submitted proofs and removes them from the queue.
-    /// This function should be called only AFTER the submission was confirmed onchain
-    async fn remove_proofs_from_queue(
-        &self,
-        finalized_batch: Vec<BatchQueueEntry>,
-    ) -> Result<(), BatcherError> {
-        info!("Removing proofs from queue...");
-        let mut batch_state_lock = self.batch_state.lock().await;
+    /// Updates user states after successful batch submission.
+    /// This function should be called only AFTER the submission was confirmed onchain.
+    /// Note: Proofs were already removed from the queue during the extraction phase.
+    async fn update_user_states_after_batch_submission(&self) -> Result<(), BatcherError> {
+        info!("Updating user states after batch submission...");
+        let batch_state_lock = self.batch_state.lock().await;
 
-        finalized_batch.iter().for_each(|entry| {
-            if batch_state_lock.batch_queue.remove(entry).is_none() {
-                // If this happens, we have a bug in our code
-                error!("Some proofs were not found in the queue. This should not happen.");
-            }
-        });
-
-        // now we calculate the new user_states
+        // Calculate the new user_states based on the current queue (proofs already removed)
         let new_user_states = self.calculate_new_user_states_data(&batch_state_lock.batch_queue);
 
         let user_addresses: Vec<Address> =
@@ -1376,6 +1380,105 @@ impl Batcher {
         Ok(())
     }
 
+    /// Updates user states immediately after batch extraction to make the operation atomic.
+    /// This function should be called right after extracting proofs from the queue.
+    /// We assume the batch posting will be successful and update user states optimistically.
+    /// IMPORTANT: Preserves last_max_fee_limit when users have no proofs left in queue.
+    async fn update_user_states_after_batch_extraction(
+        &self,
+        batch_state_lock: &tokio::sync::MutexGuard<'_, crate::types::batch_state::BatchState>,
+    ) -> Result<(), BatcherError> {
+        info!("Updating user states after batch extraction...");
+
+        // Calculate the new user_states based on the current queue (proofs already removed)
+        let new_user_states = self.calculate_new_user_states_data(&batch_state_lock.batch_queue);
+
+        let user_addresses: Vec<Address> =
+            self.user_states.iter().map(|entry| *entry.key()).collect();
+        
+        for addr in user_addresses.iter() {
+            // FIXME: The case where a the update functions return `None` can only happen when the user was not found
+            // in the `user_states` map should not really happen here, but doing this check so that we don't unwrap.
+            // Once https://github.com/yetanotherco/aligned_layer/issues/1046 is done we could return a more
+            // informative error.
+
+            // Now we update the user states related to the batch (proof count in batch and min fee in batch)
+            {
+                let user_state = self.user_states.get(addr);
+                match user_state {
+                    Some(user_state) => {
+                        let mut user_state_guard = user_state.lock().await;
+                        
+                        if let Some((proof_count, max_fee_limit, total_fees_in_queue)) = new_user_states.get(addr) {
+                            // User still has proofs in the queue
+                            user_state_guard.proofs_in_batch = *proof_count;
+                            user_state_guard.last_max_fee_limit = *max_fee_limit;
+                            user_state_guard.total_fees_in_queue = *total_fees_in_queue;
+                        } else {
+                            // User has no more proofs in the queue - only update count and total fees
+                            // but preserve the last_max_fee_limit to avoid setting it to U256::MAX
+                            // This is important for rollback scenarios where we need to restore proofs
+                            user_state_guard.proofs_in_batch = 0;
+                            user_state_guard.total_fees_in_queue = U256::zero();
+                            // Keep user_state_guard.last_max_fee_limit unchanged
+                        }
+                    }
+                    None => {
+                        return Err(BatcherError::QueueRemoveError(
+                            "Could not update user state".into(),
+                        ));
+                    }
+                }
+            }
+        }
+
+        // Update metrics
+        let queue_len = batch_state_lock.batch_queue.len();
+        let queue_size_bytes = calculate_batch_size(&batch_state_lock.batch_queue)?;
+
+        self.metrics
+            .update_queue_metrics(queue_len as i64, queue_size_bytes as i64);
+
+        Ok(())
+    }
+
+    /// Cleans up user states after successful batch submission.
+    /// Resets last_max_fee_limit to U256::MAX for users who had proofs in the submitted batch
+    /// but now have no proofs left in the queue.
+    fn cleanup_user_states_after_successful_submission(&self, finalized_batch: &[BatchQueueEntry]) {
+        use std::collections::HashSet;
+        
+        // Get unique users from the submitted batch
+        let users_in_batch: HashSet<Address> = finalized_batch.iter()
+            .map(|entry| entry.sender)
+            .collect();
+        
+        // Check current queue state to see which users still have proofs
+        let batch_state_lock = match self.batch_state.try_lock() {
+            Ok(lock) => lock,
+            Err(_) => {
+                // If we can't get the lock, skip cleanup - it's not critical
+                warn!("Could not acquire batch state lock for user state cleanup");
+                return;
+            }
+        };
+        
+        let current_user_states = self.calculate_new_user_states_data(&batch_state_lock.batch_queue);
+        
+        // For each user in the batch, check if they now have no proofs left
+        for user_addr in users_in_batch {
+            if !current_user_states.contains_key(&user_addr) {
+                // User has no proofs left in queue - reset their max_fee_limit
+                if let Some(user_state_ref) = self.user_states.get(&user_addr) {
+                    if let Ok(mut user_state_guard) = user_state_ref.try_lock() {
+                        user_state_guard.last_max_fee_limit = U256::max_value();
+                    }
+                    // If we can't get the lock, skip this user - not critical
+                }
+            }
+        }
+    }
+
     /// Takes the finalized batch as input and:
     ///     builds the merkle tree
     ///     posts verification data batch to s3
@@ -1391,7 +1494,7 @@ impl Batcher {
     ) -> Result<(), BatcherError> {
         // Acquire write lock to ensure exclusive access during batch creation (blocks all user processing)
         let _batch_processing_guard = self.batch_processing_lock.write().await;
-        
+
         let nonced_batch_verifcation_data: Vec<NoncedVerificationData> = finalized_batch
             .clone()
             .into_iter()
@@ -1468,8 +1571,8 @@ impl Batcher {
                 BatcherError::TransactionSendError(
                     TransactionSendError::SubmissionInsufficientBalance,
                 ) => {
-                    // TODO calling remove_proofs_from_queue here is a better solution, flushing only the failed batch
-                    // this would also need a message sent to the clients
+                    // TODO: In the future, we should re-add the failed batch back to the queue
+                    // For now, we flush everything as a safety measure
                     self.flush_queue_and_clear_nonce_cache().await;
                 }
                 _ => {
@@ -1480,11 +1583,11 @@ impl Batcher {
             return Err(e);
         };
 
-        // Once the submit is succesfull, we remove the submitted proofs from the queue
-        // TODO handle error case:
-        if let Err(e) = self.remove_proofs_from_queue(finalized_batch.clone()).await {
-            error!("Unexpected error while updating queue: {:?}", e);
-        }
+        // Note: Proofs were already removed from the queue during extraction phase
+        // User states were also already updated atomically during extraction
+        
+        // Clean up user states for users who had proofs in this batch but now have no proofs left
+        self.cleanup_user_states_after_successful_submission(&finalized_batch);
 
         connection::send_batch_inclusion_data_responses(finalized_batch, &batch_merkle_tree).await
     }
@@ -1554,8 +1657,11 @@ impl Batcher {
         let modified_gas_price = gas_price * U256::from(GAS_PRICE_PERCENTAGE_MULTIPLIER)
             / U256::from(PERCENTAGE_DIVIDER);
 
-        if let Some(finalized_batch) = self.is_batch_ready(block_number, modified_gas_price).await {
-                    // TODO (Mauro): There is a race condition here, 
+        // TODO (Mauro): Take all the user locks here
+        if let Some(finalized_batch) = self
+            .extract_batch_if_ready(block_number, modified_gas_price)
+            .await
+        {
 
             let batch_finalization_result = self
                 .finalize_batch(block_number, finalized_batch, modified_gas_price)
