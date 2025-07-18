@@ -1479,6 +1479,107 @@ impl Batcher {
         }
     }
 
+    /// Restores proofs to the queue after batch submission failure.
+    /// Uses similar logic to user proof submission, including handling queue capacity.
+    /// NOTE: Nonce ordering is preserved by the priority queue's eviction order:
+    /// - Lower fees get evicted first
+    /// - For same fees, higher nonces get evicted first  
+    /// This ensures we never have nonce N+1 without nonce N in the queue.
+    async fn restore_proofs_after_batch_failure(&self, failed_batch: &[BatchQueueEntry]) {
+        info!("Restoring {} proofs to queue after batch failure", failed_batch.len());
+        
+        let mut batch_state_lock = self.batch_state.lock().await;
+        let mut restored_entries = Vec::new();
+
+        for entry in failed_batch {
+            let priority = BatchQueueEntryPriority::new(
+                entry.nonced_verification_data.max_fee,
+                entry.nonced_verification_data.nonce,
+            );
+
+            // Check if queue is full
+            if batch_state_lock.is_queue_full() {
+                // Use same logic as user submission - evict lowest priority if this one is higher
+                if let Some((lowest_entry, _)) = batch_state_lock.batch_queue.peek() {
+                    let lowest_fee = lowest_entry.nonced_verification_data.max_fee;
+                    let restore_fee = entry.nonced_verification_data.max_fee;
+
+                    if restore_fee > lowest_fee {
+                        // Evict the lowest priority entry (preserves nonce ordering)
+                        if let Some((evicted_entry, _)) = batch_state_lock.batch_queue.pop() {
+                            warn!("Queue full during restoration, evicting proof from sender {} with nonce {} (fee: {})",
+                                evicted_entry.sender, evicted_entry.nonced_verification_data.nonce, evicted_entry.nonced_verification_data.max_fee);
+                            
+                            // Update user state for evicted entry
+                            self.update_evicted_user_state(&evicted_entry, &batch_state_lock.batch_queue).await;
+                            
+                            // Notify the evicted user via websocket
+                            if let Some(evicted_ws_sink) = evicted_entry.messaging_sink {
+                                connection::send_message(
+                                    evicted_ws_sink,
+                                    aligned_sdk::common::types::SubmitProofResponseMessage::UnderpricedProof,
+                                )
+                                .await;
+                            }
+                        }
+                    } else {
+                        warn!("Queue full and restored proof has lower priority, dropping proof from sender {} with nonce {} (fee: {})",
+                            entry.sender, entry.nonced_verification_data.nonce, entry.nonced_verification_data.max_fee);
+                        continue;
+                    }
+                }
+            }
+
+            // Add the proof back to the queue
+            batch_state_lock.batch_queue.push(entry.clone(), priority);
+            restored_entries.push(entry);
+        }
+
+        info!("Restored {} proofs to queue, new queue length: {}", restored_entries.len(), batch_state_lock.batch_queue.len());
+        
+        // Update user states for successfully restored proofs
+        self.update_user_states_for_restored_proofs(&restored_entries, &batch_state_lock).await;
+    }
+
+    /// Updates user states for proofs that were successfully restored to the queue.
+    /// This essentially undoes the optimistic user state updates that were made during extraction.
+    async fn update_user_states_for_restored_proofs(
+        &self,
+        restored_entries: &[&BatchQueueEntry],
+        batch_state_lock: &tokio::sync::MutexGuard<'_, crate::types::batch_state::BatchState>,
+    ) {
+        use std::collections::HashMap;
+
+        // Group restored entries by user address
+        let mut users_restored_proofs: HashMap<Address, Vec<&BatchQueueEntry>> = HashMap::new();
+        for entry in restored_entries {
+            users_restored_proofs.entry(entry.sender).or_default().push(entry);
+        }
+
+        // Calculate new user states based on current queue (including restored proofs)
+        let new_user_states = self.calculate_new_user_states_data(&batch_state_lock.batch_queue);
+
+        // Update user states for each user who had proofs restored
+        for (user_addr, _user_entries) in users_restored_proofs {
+            if let Some(user_state_ref) = self.user_states.get(&user_addr) {
+                let mut user_state_guard = user_state_ref.lock().await;
+                
+                // Update based on current queue state (which includes restored proofs)
+                if let Some((proof_count, max_fee_limit, total_fees_in_queue)) = new_user_states.get(&user_addr) {
+                    user_state_guard.proofs_in_batch = *proof_count;
+                    user_state_guard.last_max_fee_limit = *max_fee_limit;
+                    user_state_guard.total_fees_in_queue = *total_fees_in_queue;
+                    
+                    info!("Restored user state for {}: {} proofs, total fees: {}", 
+                        user_addr, proof_count, total_fees_in_queue);
+                } else {
+                    // This shouldn't happen since we just added proofs for this user
+                    warn!("User {} had proofs restored but not found in queue calculation", user_addr);
+                }
+            }
+        }
+    }
+
     /// Takes the finalized batch as input and:
     ///     builds the merkle tree
     ///     posts verification data batch to s3
@@ -1489,16 +1590,15 @@ impl Batcher {
     async fn finalize_batch(
         &self,
         block_number: u64,
-        finalized_batch: Vec<BatchQueueEntry>,
+        finalized_batch: &[BatchQueueEntry],
         gas_price: U256,
     ) -> Result<(), BatcherError> {
         // Acquire write lock to ensure exclusive access during batch creation (blocks all user processing)
         let _batch_processing_guard = self.batch_processing_lock.write().await;
 
         let nonced_batch_verifcation_data: Vec<NoncedVerificationData> = finalized_batch
-            .clone()
-            .into_iter()
-            .map(|entry| entry.nonced_verification_data)
+            .iter()
+            .map(|entry| entry.nonced_verification_data.clone())
             .collect();
 
         let batch_verification_data: Vec<VerificationData> = nonced_batch_verifcation_data
@@ -1511,9 +1611,8 @@ impl Batcher {
 
         info!("Finalizing batch. Length: {}", finalized_batch.len());
         let batch_data_comm: Vec<VerificationDataCommitment> = finalized_batch
-            .clone()
-            .into_iter()
-            .map(|entry| entry.verification_data_commitment)
+            .iter()
+            .map(|entry| entry.verification_data_commitment.clone())
             .collect();
 
         let batch_merkle_tree: MerkleTree<VerificationCommitmentBatch> =
@@ -1664,14 +1763,19 @@ impl Batcher {
         {
 
             let batch_finalization_result = self
-                .finalize_batch(block_number, finalized_batch, modified_gas_price)
+                .finalize_batch(block_number, &finalized_batch, modified_gas_price)
                 .await;
 
             // Resetting this here to avoid doing it on every return path of `finalize_batch` function
             let mut batch_posting = self.posting_batch.lock().await;
             *batch_posting = false;
 
-            batch_finalization_result?;
+            // If batch finalization failed, restore the proofs to the queue
+            if let Err(e) = batch_finalization_result {
+                error!("Batch finalization failed, restoring proofs to queue: {:?}", e);
+                self.restore_proofs_after_batch_failure(&finalized_batch).await;
+                return Err(e);
+            }
         }
 
         Ok(())
