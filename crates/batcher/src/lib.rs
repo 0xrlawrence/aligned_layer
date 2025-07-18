@@ -100,7 +100,7 @@ pub struct Batcher {
     /// The general business rule is:
     /// - User processing can be done in parallel unless a batch creation is happening
     /// - Batch creation needs to be able to change all the states, so all processing
-    /// needs to be stopped, and all user_states locks need to be taken
+    ///   needs to be stopped, and all user_states locks need to be taken
     batch_state: Mutex<BatchState>,
     user_states: DashMap<Address, Arc<Mutex<UserState>>>,
     /// When posting a task, this is taken as a write to stop new threads to update
@@ -1317,68 +1317,9 @@ impl Batcher {
             finalized_batch.len()
         );
 
-        // PHASE 1.5: Update user states immediately after batch extraction to make the operation atomic
-        // We assume the batch posting will be successful, so we update user states now
-        if let Err(e) = self.update_user_states_after_batch_extraction(&batch_state_lock).await {
-            error!("Failed to update user states after batch extraction: {:?}", e);
-            // We could potentially put the batch back in the queue here if needed
-            *batch_posting = false;
-            return None;
-        }
-
         Some(finalized_batch)
     }
 
-    /// Updates user states after successful batch submission.
-    /// This function should be called only AFTER the submission was confirmed onchain.
-    /// Note: Proofs were already removed from the queue during the extraction phase.
-    async fn update_user_states_after_batch_submission(&self) -> Result<(), BatcherError> {
-        info!("Updating user states after batch submission...");
-        let batch_state_lock = self.batch_state.lock().await;
-
-        // Calculate the new user_states based on the current queue (proofs already removed)
-        let new_user_states = self.calculate_new_user_states_data(&batch_state_lock.batch_queue);
-
-        let user_addresses: Vec<Address> =
-            self.user_states.iter().map(|entry| *entry.key()).collect();
-        let default_value = (0, U256::MAX, U256::zero());
-        for addr in user_addresses.iter() {
-            let (proof_count, max_fee_limit, total_fees_in_queue) =
-                new_user_states.get(addr).unwrap_or(&default_value);
-
-            // FIXME: The case where a the update functions return `None` can only happen when the user was not found
-            // in the `user_states` map should not really happen here, but doing this check so that we don't unwrap.
-            // Once https://github.com/yetanotherco/aligned_layer/issues/1046 is done we could return a more
-            // informative error.
-
-            // Now we update the user states related to the batch (proof count in batch and min fee in batch)
-            {
-                let user_state = self.user_states.get(addr);
-                match user_state {
-                    Some(user_state) => {
-                        let mut user_state_guard = user_state.lock().await;
-                        user_state_guard.proofs_in_batch = *proof_count;
-                        user_state_guard.last_max_fee_limit = *max_fee_limit;
-                        user_state_guard.total_fees_in_queue = *total_fees_in_queue;
-                    }
-                    None => {
-                        return Err(BatcherError::QueueRemoveError(
-                            "Could not update user state".into(),
-                        ));
-                    }
-                }
-            }
-        }
-
-        // Update metrics
-        let queue_len = batch_state_lock.batch_queue.len();
-        let queue_size_bytes = calculate_batch_size(&batch_state_lock.batch_queue)?;
-
-        self.metrics
-            .update_queue_metrics(queue_len as i64, queue_size_bytes as i64);
-
-        Ok(())
-    }
 
     /// Updates user states immediately after batch extraction to make the operation atomic.
     /// This function should be called right after extracting proofs from the queue.
@@ -1484,7 +1425,7 @@ impl Batcher {
     /// NOTE: Nonce ordering is preserved by the priority queue's eviction order:
     /// - Lower fees get evicted first
     /// - For same fees, higher nonces get evicted first  
-    /// This ensures we never have nonce N+1 without nonce N in the queue.
+    ///   This ensures we never have nonce N+1 without nonce N in the queue.
     async fn restore_proofs_after_batch_failure(&self, failed_batch: &[BatchQueueEntry]) {
         info!("Restoring {} proofs to queue after batch failure", failed_batch.len());
         
@@ -1651,7 +1592,7 @@ impl Batcher {
                 &batch_bytes,
                 &batch_merkle_tree.root,
                 leaves,
-                &finalized_batch,
+                finalized_batch,
                 gas_price,
             )
             .await
@@ -1686,7 +1627,7 @@ impl Batcher {
         // User states were also already updated atomically during extraction
         
         // Clean up user states for users who had proofs in this batch but now have no proofs left
-        self.cleanup_user_states_after_successful_submission(&finalized_batch);
+        self.cleanup_user_states_after_successful_submission(finalized_batch);
 
         connection::send_batch_inclusion_data_responses(finalized_batch, &batch_merkle_tree).await
     }
