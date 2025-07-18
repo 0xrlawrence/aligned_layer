@@ -73,6 +73,7 @@ mod zk_utils;
 pub const LISTEN_NEW_BLOCKS_MAX_TIMES: usize = usize::MAX;
 
 pub struct Batcher {
+    // Configuration parameters
     s3_client: S3Client,
     s3_bucket_name: String,
     download_endpoint: String,
@@ -85,20 +86,39 @@ pub struct Batcher {
     payment_service_fallback: BatcherPaymentService,
     service_manager: ServiceManager,
     service_manager_fallback: ServiceManager,
-    batch_state: Mutex<BatchState>,
-    user_states: DashMap<Address, Arc<Mutex<UserState>>>,
     min_block_interval: u64,
     transaction_wait_timeout: u64,
     max_proof_size: usize,
     max_batch_byte_size: usize,
     max_batch_proof_qty: usize,
-    last_uploaded_batch_block: Mutex<u64>,
     pre_verification_is_enabled: bool,
     non_paying_config: Option<NonPayingConfig>,
-    posting_batch: Mutex<bool>,
-    disabled_verifiers: Mutex<U256>,
     aggregator_fee_percentage_multiplier: u128,
     aggregator_gas_cost: u128,
+    
+    // Shared state (Mutex)
+    /// The general business rule is:
+    /// - User processing can be done in parallel unless a batch creation is happening
+    /// - Batch creation needs to be able to change all the states, so all processing
+    /// needs to be stopped, and all user_states locks need to be taken
+    batch_state: Mutex<BatchState>,
+    user_states: DashMap<Address, Arc<Mutex<UserState>>>,
+    /// When posting a task, this is taken as a write to stop new threads to update 
+    /// user_states, ideally we would want a bigger mutex on the whole user_states, but this can't be done 
+    batch_processing_lock: RwLock<()>,
+
+    last_uploaded_batch_block: Mutex<u64>,
+
+    /// This is used to avoid multiple batches being submitted at the same time
+    /// It could be removed in the future by changing how we spawn
+    /// the batch creation task
+    posting_batch: Mutex<bool>,
+
+
+    disabled_verifiers: Mutex<U256>,
+    
+    
+    // Observability and monitoring
     pub metrics: metrics::BatcherMetrics,
     pub telemetry: TelemetrySender,
 }
@@ -274,6 +294,7 @@ impl Batcher {
                 .aggregator_fee_percentage_multiplier,
             aggregator_gas_cost: config.batcher.aggregator_gas_cost,
             posting_batch: Mutex::new(false),
+            batch_processing_lock: RwLock::new(()),
             batch_state: Mutex::new(batch_state),
             user_states,
             disabled_verifiers: Mutex::new(disabled_verifiers),
@@ -667,6 +688,9 @@ impl Batcher {
         client_msg: Box<SubmitProofMessage>,
         ws_conn_sink: WsMessageSink,
     ) -> Result<(), Error> {
+        // Acquire read lock to allow concurrent user processing but block during batch creation
+        let _batch_processing_guard = self.batch_processing_lock.read().await;
+        
         let msg_nonce = client_msg.verification_data.nonce;
         debug!("Received message with nonce: {msg_nonce:?}");
         self.metrics.received_proofs.inc();
@@ -1365,6 +1389,9 @@ impl Batcher {
         finalized_batch: Vec<BatchQueueEntry>,
         gas_price: U256,
     ) -> Result<(), BatcherError> {
+        // Acquire write lock to ensure exclusive access during batch creation (blocks all user processing)
+        let _batch_processing_guard = self.batch_processing_lock.write().await;
+        
         let nonced_batch_verifcation_data: Vec<NoncedVerificationData> = finalized_batch
             .clone()
             .into_iter()
@@ -1528,6 +1555,8 @@ impl Batcher {
             / U256::from(PERCENTAGE_DIVIDER);
 
         if let Some(finalized_batch) = self.is_batch_ready(block_number, modified_gas_price).await {
+                    // TODO (Mauro): There is a race condition here, 
+
             let batch_finalization_result = self
                 .finalize_batch(block_number, finalized_batch, modified_gas_price)
                 .await;
