@@ -301,7 +301,34 @@ impl Batcher {
         }
     }
 
-    async fn update_evicted_user_state(
+    fn update_evicted_user_state_with_lock(
+        &self,
+        removed_entry: &types::batch_queue::BatchQueueEntry,
+        batch_queue: &types::batch_queue::BatchQueue,
+        user_state_guard: &mut tokio::sync::MutexGuard<'_, crate::types::user_state::UserState>,
+    ) {
+        let addr = removed_entry.sender;
+
+        let new_last_max_fee_limit = match batch_queue
+            .iter()
+            .filter(|(e, _)| e.sender == addr)
+            .next_back()
+        {
+            Some((last_entry, _)) => last_entry.nonced_verification_data.max_fee,
+            None => {
+                self.user_states.remove(&addr);
+                return;
+            }
+        };
+
+        user_state_guard.proofs_in_batch -= 1;
+        user_state_guard.nonce -= U256::one();
+        user_state_guard.total_fees_in_queue -= removed_entry.nonced_verification_data.max_fee;
+        user_state_guard.last_max_fee_limit = new_last_max_fee_limit;
+    }
+
+    // Fallback async version for restoration path where we don't have pre-held locks
+    async fn update_evicted_user_state_async(
         &self,
         removed_entry: &types::batch_queue::BatchQueueEntry,
         batch_queue: &types::batch_queue::BatchQueue,
@@ -912,55 +939,80 @@ impl Batcher {
         // * ---------------------------------------------------------------------*
         // *        Perform validation over batcher queue                         *
         // * ---------------------------------------------------------------------*
+        
 
         let mut batch_state_lock = self.batch_state.lock().await;
         if batch_state_lock.is_queue_full() {
             debug!("Batch queue is full. Evaluating if the incoming proof can replace a lower-priority entry.");
 
-            // This cannot panic, if the batch queue is full it has at least one item
-            let (lowest_priority_entry, _) = batch_state_lock
-                .batch_queue
-                .peek()
-                .expect("Batch queue was expected to be full, but somehow no item was inside");
-
-            let lowest_fee_in_queue = lowest_priority_entry.nonced_verification_data.max_fee;
-
             let new_proof_fee = nonced_verification_data.max_fee;
+            let mut evicted_entry = None;
 
-            // We will keep the proof with the highest fee
-            // Note: we previously checked that if it's a new proof from the same user the fee is the same or lower
-            // So this will never eject a proof of the same user with a lower nonce
-            // which is the expected behaviour
-            if new_proof_fee > lowest_fee_in_queue {
-                // This cannot panic, if the batch queue is full it has at least one item
-                let (removed_entry, _) = batch_state_lock
-                    .batch_queue
-                    .pop()
-                    .expect("Batch queue was expected to be full, but somehow no item was inside");
+            // Collect addresses of potential candidates (lightweight)
+            let eviction_candidates: Vec<Address> = batch_state_lock
+                .batch_queue
+                .iter()
+                .filter_map(|(entry, _)| {
+                    if new_proof_fee > entry.nonced_verification_data.max_fee {
+                        Some(entry.sender)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
 
+            // Try to find any candidate whose lock we can acquire and immediately process them
+            for candidate_addr in eviction_candidates {
+                if let Some(user_state_arc) = self.user_states.get(&candidate_addr) {
+                    if let Ok(mut user_guard) = user_state_arc.try_lock() {
+                        // Found someone whose lock we can get - now find and remove their entry
+                        let entries_to_check: Vec<_> = batch_state_lock
+                            .batch_queue
+                            .iter()
+                            .filter(|(entry, _)| entry.sender == candidate_addr && new_proof_fee > entry.nonced_verification_data.max_fee)
+                            .map(|(entry, _)| entry.clone())
+                            .collect();
+                        
+                        if let Some(target_entry) = entries_to_check.into_iter().next() {
+                            let removed_entry = batch_state_lock.batch_queue.remove(&target_entry).map(|(e, _)| e);
+                            
+                            if let Some(removed) = removed_entry {
+                                info!(
+                                    "Incoming proof (nonce: {}, fee: {}) replacing proof from sender {} with nonce {} (fee: {})",
+                                    nonced_verification_data.nonce,
+                                    new_proof_fee,
+                                    removed.sender,
+                                    removed.nonced_verification_data.nonce,
+                                    removed.nonced_verification_data.max_fee
+                                );
+
+                                // Update the evicted user's state immediately
+                                self.update_evicted_user_state_with_lock(&removed, &batch_state_lock.batch_queue, &mut user_guard);
+                                
+                                // Notify the evicted user
+                                if let Some(ref removed_entry_ws) = removed.messaging_sink {
+                                    send_message(
+                                        removed_entry_ws.clone(),
+                                        SubmitProofResponseMessage::UnderpricedProof,
+                                    )
+                                    .await;
+                                }
+
+                                evicted_entry = Some(removed);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Check if we successfully evicted someone
+            if evicted_entry.is_none() {
+                // No lock could be acquired or no evictable entry found - reject this proof
                 info!(
-                    "Incoming proof (nonce: {}, fee: {}) has higher fee. Replacing lowest fee proof from sender {} with nonce {}.",
+                    "Incoming proof (nonce: {}, fee: {}) rejected - queue is full and no evictable entries found.",
                     nonced_verification_data.nonce,
-                    nonced_verification_data.max_fee,
-                    removed_entry.sender,
-                    removed_entry.nonced_verification_data.nonce
-                );
-
-                self.update_evicted_user_state(&removed_entry, &batch_state_lock.batch_queue)
-                    .await;
-
-                if let Some(removed_entry_ws) = removed_entry.messaging_sink {
-                    send_message(
-                        removed_entry_ws,
-                        SubmitProofResponseMessage::UnderpricedProof,
-                    )
-                    .await;
-                };
-            } else {
-                info!(
-                    "Incoming proof (nonce: {}, fee: {}) has lower priority than all entries in the full queue. Rejecting submission.",
-                    nonced_verification_data.nonce,
-                    nonced_verification_data.max_fee
+                    new_proof_fee
                 );
                 std::mem::drop(batch_state_lock);
                 send_message(
@@ -1036,9 +1088,26 @@ impl Batcher {
     ) {
         let replacement_max_fee = nonced_verification_data.max_fee;
         let nonce = nonced_verification_data.nonce;
-        let mut batch_state_lock = self.batch_state.lock().await;
-        let Some(entry) = batch_state_lock.get_entry(addr, nonce) else {
-            std::mem::drop(batch_state_lock);
+        
+        // Take user state lock first to maintain proper lock ordering
+        let user_state = match self.user_states.get(&addr) {
+            Some(user_state) => user_state,
+            None => {
+                warn!("User state not found for address {addr} during replacement message");
+                send_message(
+                    ws_conn_sink.clone(),
+                    SubmitProofResponseMessage::InvalidNonce,
+                )
+                .await;
+                self.metrics.user_error(&["invalid_nonce", ""]);
+                return;
+            }
+        };
+        let mut user_state_guard = user_state.lock().await; // First: user lock
+        let mut batch_state_guard = self.batch_state.lock().await; // Second: batch lock
+        let Some(entry) = batch_state_guard.get_entry(addr, nonce) else {
+            drop(batch_state_guard);
+            drop(user_state_guard);
             warn!("Invalid nonce for address {addr}. Queue entry with nonce {nonce} not found");
             send_message(
                 ws_conn_sink.clone(),
@@ -1051,7 +1120,8 @@ impl Batcher {
 
         let original_max_fee = entry.nonced_verification_data.max_fee;
         if original_max_fee > replacement_max_fee {
-            std::mem::drop(batch_state_lock);
+            drop(batch_state_guard);
+            drop(user_state_guard);
             warn!("Invalid replacement message for address {addr}, had max fee: {original_max_fee:?}, received fee: {replacement_max_fee:?}");
             send_message(
                 ws_conn_sink.clone(),
@@ -1090,8 +1160,8 @@ impl Batcher {
         }
 
         replacement_entry.messaging_sink = Some(ws_conn_sink.clone());
-        if !batch_state_lock.replacement_entry_is_valid(&replacement_entry) {
-            std::mem::drop(batch_state_lock);
+        if !batch_state_guard.replacement_entry_is_valid(&replacement_entry) {
+            std::mem::drop(batch_state_guard);
             warn!("Invalid replacement message");
             send_message(
                 ws_conn_sink.clone(),
@@ -1112,54 +1182,18 @@ impl Batcher {
         // note that the entries are considered equal for the priority queue
         // if they have the same nonce and sender, so we can remove the old entry
         // by calling remove with the new entry
-        batch_state_lock.batch_queue.remove(&replacement_entry);
-        batch_state_lock.batch_queue.push(
+        batch_state_guard.batch_queue.remove(&replacement_entry);
+        batch_state_guard.batch_queue.push(
             replacement_entry.clone(),
             BatchQueueEntryPriority::new(replacement_max_fee, nonce),
         );
 
-        // update max_fee_limit
-        let updated_max_fee_limit_in_batch = batch_state_lock.get_user_min_fee_in_batch(&addr);
-        {
-            let user_state = self.user_states.get(&addr);
-            match user_state {
-                Some(user_state) => {
-                    let mut user_state_guard = user_state.lock().await;
-                    user_state_guard.last_max_fee_limit = updated_max_fee_limit_in_batch;
-                }
-                None => {
-                    std::mem::drop(batch_state_lock);
-                    warn!("User state for address {addr:?} was not present in batcher user states, but it should be");
-                    send_message(
-                        ws_conn_sink.clone(),
-                        SubmitProofResponseMessage::AddToBatchError,
-                    )
-                    .await;
-                    return;
-                }
-            }
-        }
-
-        // update total_fees_in_queue
-        {
-            let user_state = self.user_states.get(&addr);
-            match user_state {
-                Some(user_state) => {
-                    let mut user_state_guard = user_state.lock().await;
-                    let fee_difference = replacement_max_fee - original_max_fee;
-                    user_state_guard.total_fees_in_queue += fee_difference;
-                }
-                None => {
-                    std::mem::drop(batch_state_lock);
-                    warn!("User state for address {addr:?} was not present in batcher user states, but it should be");
-                    send_message(
-                        ws_conn_sink.clone(),
-                        SubmitProofResponseMessage::AddToBatchError,
-                    )
-                    .await;
-                }
-            }
-        }
+        // update max_fee_limit and total_fees_in_queue using already held user_state_guard
+        let updated_max_fee_limit_in_batch = batch_state_guard.get_user_min_fee_in_batch(&addr);
+        user_state_guard.last_max_fee_limit = updated_max_fee_limit_in_batch;
+        
+        let fee_difference = replacement_max_fee - original_max_fee;
+        user_state_guard.total_fees_in_queue += fee_difference;
     }
 
     async fn disabled_verifiers(&self) -> Result<U256, ContractError<SignerMiddlewareT>> {
@@ -1321,64 +1355,41 @@ impl Batcher {
     }
 
 
-    /// Updates user states immediately after batch extraction to make the operation atomic.
-    /// This function should be called right after extracting proofs from the queue.
-    /// We assume the batch posting will be successful and update user states optimistically.
-    /// IMPORTANT: Preserves last_max_fee_limit when users have no proofs left in queue.
-    async fn update_user_states_after_batch_extraction(
+    /// Updates user states based on current queue state after batch operations.
+    /// Used for both successful batch confirmation and failed batch restoration.
+    /// Updates proofs_in_batch, total_fees_in_queue, and last_max_fee_limit based on current queue state.
+    /// Uses proper lock ordering: user_state -> batch_state to avoid deadlocks.
+    async fn update_user_states_from_queue_state(
         &self,
-        batch_state_lock: &tokio::sync::MutexGuard<'_, crate::types::batch_state::BatchState>,
+        affected_users: std::collections::HashSet<Address>,
     ) -> Result<(), BatcherError> {
-        info!("Updating user states after batch extraction...");
-
-        // Calculate the new user_states based on the current queue (proofs already removed)
-        let new_user_states = self.calculate_new_user_states_data(&batch_state_lock.batch_queue);
-
-        let user_addresses: Vec<Address> =
-            self.user_states.iter().map(|entry| *entry.key()).collect();
-        
-        for addr in user_addresses.iter() {
-            // FIXME: The case where a the update functions return `None` can only happen when the user was not found
-            // in the `user_states` map should not really happen here, but doing this check so that we don't unwrap.
-            // Once https://github.com/yetanotherco/aligned_layer/issues/1046 is done we could return a more
-            // informative error.
-
-            // Now we update the user states related to the batch (proof count in batch and min fee in batch)
-            {
-                let user_state = self.user_states.get(addr);
-                match user_state {
-                    Some(user_state) => {
-                        let mut user_state_guard = user_state.lock().await;
-                        
-                        if let Some((proof_count, max_fee_limit, total_fees_in_queue)) = new_user_states.get(addr) {
-                            // User still has proofs in the queue
-                            user_state_guard.proofs_in_batch = *proof_count;
-                            user_state_guard.last_max_fee_limit = *max_fee_limit;
-                            user_state_guard.total_fees_in_queue = *total_fees_in_queue;
-                        } else {
-                            // User has no more proofs in the queue - only update count and total fees
-                            // but preserve the last_max_fee_limit to avoid setting it to U256::MAX
-                            // This is important for rollback scenarios where we need to restore proofs
-                            user_state_guard.proofs_in_batch = 0;
-                            user_state_guard.total_fees_in_queue = U256::zero();
-                            // Keep user_state_guard.last_max_fee_limit unchanged
-                        }
-                    }
-                    None => {
-                        return Err(BatcherError::QueueRemoveError(
-                            "Could not update user state".into(),
-                        ));
-                    }
+        // Update each user's state with proper lock ordering
+        for addr in affected_users {
+            if let Some(user_state) = self.user_states.get(&addr) {
+                let mut user_state_guard = user_state.lock().await; // First: user lock
+                let batch_state_lock = self.batch_state.lock().await; // Second: batch lock
+                
+                // Calculate what each user's state should be based on current queue contents
+                let current_queue_user_states = self.calculate_new_user_states_data(&batch_state_lock.batch_queue);
+                
+                if let Some((proof_count, min_max_fee_in_queue, total_fees_in_queue)) = current_queue_user_states.get(&addr) {
+                    // User has proofs in queue - use calculated values
+                    user_state_guard.proofs_in_batch = *proof_count;
+                    user_state_guard.total_fees_in_queue = *total_fees_in_queue;
+                    user_state_guard.last_max_fee_limit = *min_max_fee_in_queue;
+                } else {
+                    // User not found in queue - reset to defaults
+                    user_state_guard.proofs_in_batch = 0;
+                    user_state_guard.total_fees_in_queue = U256::zero();
+                    user_state_guard.last_max_fee_limit = U256::MAX;
                 }
+                
+                drop(batch_state_lock); // Release batch lock
+                drop(user_state_guard); // Release user lock
+            } else {
+                warn!("User state not found for address {}", addr);
             }
         }
-
-        // Update metrics
-        let queue_len = batch_state_lock.batch_queue.len();
-        let queue_size_bytes = calculate_batch_size(&batch_state_lock.batch_queue)?;
-
-        self.metrics
-            .update_queue_metrics(queue_len as i64, queue_size_bytes as i64);
 
         Ok(())
     }
@@ -1452,7 +1463,7 @@ impl Batcher {
                                 evicted_entry.sender, evicted_entry.nonced_verification_data.nonce, evicted_entry.nonced_verification_data.max_fee);
                             
                             // Update user state for evicted entry
-                            self.update_evicted_user_state(&evicted_entry, &batch_state_lock.batch_queue).await;
+                            self.update_evicted_user_state_async(&evicted_entry, &batch_state_lock.batch_queue).await;
                             
                             // Notify the evicted user via websocket
                             if let Some(evicted_ws_sink) = evicted_entry.messaging_sink {
@@ -1478,48 +1489,20 @@ impl Batcher {
 
         info!("Restored {} proofs to queue, new queue length: {}", restored_entries.len(), batch_state_lock.batch_queue.len());
         
+        // Get unique users from restored entries
+        let users_with_restored_proofs: std::collections::HashSet<Address> = restored_entries.iter()
+            .map(|entry| entry.sender)
+            .collect();
+            
+        drop(batch_state_lock); // Release batch lock before user state updates
+        
         // Update user states for successfully restored proofs
-        self.update_user_states_for_restored_proofs(&restored_entries, &batch_state_lock).await;
-    }
-
-    /// Updates user states for proofs that were successfully restored to the queue.
-    /// This essentially undoes the optimistic user state updates that were made during extraction.
-    async fn update_user_states_for_restored_proofs(
-        &self,
-        restored_entries: &[&BatchQueueEntry],
-        batch_state_lock: &tokio::sync::MutexGuard<'_, crate::types::batch_state::BatchState>,
-    ) {
-        use std::collections::HashMap;
-
-        // Group restored entries by user address
-        let mut users_restored_proofs: HashMap<Address, Vec<&BatchQueueEntry>> = HashMap::new();
-        for entry in restored_entries {
-            users_restored_proofs.entry(entry.sender).or_default().push(entry);
-        }
-
-        // Calculate new user states based on current queue (including restored proofs)
-        let new_user_states = self.calculate_new_user_states_data(&batch_state_lock.batch_queue);
-
-        // Update user states for each user who had proofs restored
-        for (user_addr, _user_entries) in users_restored_proofs {
-            if let Some(user_state_ref) = self.user_states.get(&user_addr) {
-                let mut user_state_guard = user_state_ref.lock().await;
-                
-                // Update based on current queue state (which includes restored proofs)
-                if let Some((proof_count, max_fee_limit, total_fees_in_queue)) = new_user_states.get(&user_addr) {
-                    user_state_guard.proofs_in_batch = *proof_count;
-                    user_state_guard.last_max_fee_limit = *max_fee_limit;
-                    user_state_guard.total_fees_in_queue = *total_fees_in_queue;
-                    
-                    info!("Restored user state for {}: {} proofs, total fees: {}", 
-                        user_addr, proof_count, total_fees_in_queue);
-                } else {
-                    // This shouldn't happen since we just added proofs for this user
-                    warn!("User {} had proofs restored but not found in queue calculation", user_addr);
-                }
-            }
+        info!("Updating user states after proof restoration...");
+        if let Err(e) = self.update_user_states_from_queue_state(users_with_restored_proofs).await {
+            error!("Failed to update user states after proof restoration: {:?}", e);
         }
     }
+
 
     /// Takes the finalized batch as input and:
     ///     builds the merkle tree
@@ -1624,7 +1607,15 @@ impl Batcher {
         };
 
         // Note: Proofs were already removed from the queue during extraction phase
-        // User states were also already updated atomically during extraction
+        // Now update user states based on current queue state after successful submission
+        info!("Updating user states after batch confirmation...");
+        let users_in_batch: std::collections::HashSet<Address> = finalized_batch.iter()
+            .map(|entry| entry.sender)
+            .collect();
+        if let Err(e) = self.update_user_states_from_queue_state(users_in_batch).await {
+            error!("Failed to update user states after batch confirmation: {:?}", e);
+            // Continue with the rest of the process since batch was already submitted successfully
+        }
         
         // Clean up user states for users who had proofs in this batch but now have no proofs left
         self.cleanup_user_states_after_successful_submission(finalized_batch);
