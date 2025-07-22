@@ -160,7 +160,7 @@ pub(crate) fn extract_batch_directly(
     let mut batch_size = calculate_batch_size(batch_queue)?;
     let mut rejected_entries = Vec::new();
 
-    // Remove entries that won't pay enough (same logic as try_build_batch)
+    // Remove entries that won't pay enough, or that makes a queue that is too big
     loop {
         let should_remove = if let Some((entry, _)) = batch_queue.peek() {
             let batch_len = batch_queue.len();
