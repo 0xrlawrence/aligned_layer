@@ -35,3 +35,6 @@ witness.wtns
 *.zkey
 circuit_cpp/
 circuit_js
+
+# Claude Code files
+CLAUDE.md
