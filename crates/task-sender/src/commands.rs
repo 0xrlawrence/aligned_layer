@@ -318,9 +318,9 @@ pub async fn send_infinite_proofs(args: SendInfiniteProofsArgs) {
     let network: Network = args.network.into();
     info!("Starting senders!");
     for (i, sender) in senders.iter().enumerate() {
+        // this clones are necessary because of the move
         let wallet = sender.wallet.clone();
         let verification_data = verification_data.clone();
-        // this is necessary because of the move
         let network_clone = network.clone();
 
         // a thread to send tasks from each loaded wallet:
@@ -347,11 +347,11 @@ pub async fn send_infinite_proofs(args: SendInfiniteProofsArgs) {
 
                 info!(
                     "Sending {:?} Proofs to Aligned Batcher on {:?} from sender {}, nonce: {}, address: {:?}",
-                    args.burst_size, n.clone(), i, nonce, wallet.address(),
+                    args.burst_size, n, i, nonce, wallet.address(),
                 );
 
                 let aligned_verification_data = submit_multiple(
-                    n.clone(),
+                    n,
                     &verification_data_to_send.clone(),
                     max_fee,
                     wallet.clone(),
