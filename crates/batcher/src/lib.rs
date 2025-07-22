@@ -103,10 +103,7 @@ pub struct Batcher {
     ///   needs to be stopped, and all user_states locks need to be taken
     batch_state: Mutex<BatchState>,
     user_states: DashMap<Address, Arc<Mutex<UserState>>>,
-    /// When posting a task, this is taken as a write to stop new threads to update
-    /// user_states, ideally we would want a bigger mutex on the whole user_states, but this can't be done
-    batch_processing_lock: RwLock<()>,
-
+    
     last_uploaded_batch_block: Mutex<u64>,
 
     /// This is used to avoid multiple batches being submitted at the same time
@@ -712,8 +709,6 @@ impl Batcher {
         client_msg: Box<SubmitProofMessage>,
         ws_conn_sink: WsMessageSink,
     ) -> Result<(), Error> {
-        // Acquire read lock to allow concurrent user processing but block during batch creation
-        let _batch_processing_guard = self.batch_processing_lock.read().await;
 
         let msg_nonce = client_msg.verification_data.nonce;
         debug!("Received message with nonce: {msg_nonce:?}");
@@ -870,6 +865,8 @@ impl Batcher {
 
         // In this case, the message might be a replacement one. If it is valid,
         // we replace the old entry with the new from the replacement message.
+        // Notice this stops the normal flow of the handle_submit_proof.
+        // locks will be taken inside this function
         if expected_nonce > msg_nonce {
             info!("Possible replacement message received: Expected nonce {expected_nonce:?} - message nonce: {msg_nonce:?}");
             self.handle_replacement_message(
@@ -1543,8 +1540,6 @@ impl Batcher {
         finalized_batch: &[BatchQueueEntry],
         gas_price: U256,
     ) -> Result<(), BatcherError> {
-        // Acquire write lock to ensure exclusive access during batch creation (blocks all user processing)
-        let _batch_processing_guard = self.batch_processing_lock.write().await;
 
         let nonced_batch_verifcation_data: Vec<NoncedVerificationData> = finalized_batch
             .iter()
