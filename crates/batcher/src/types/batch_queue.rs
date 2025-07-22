@@ -798,6 +798,70 @@ mod test {
     }
 
     #[test]
+    fn batch_finalization_algorithm_works_single_high_fee_proof() {
+        // Test the scenario: 1 proof with high fee that should be viable
+        let proof_generator_addr = Address::random();
+        let payment_service_addr = Address::random();
+        let sender_addr = Address::random();
+        let bytes_for_verification_data = vec![42_u8; 10];
+        let dummy_signature = Signature {
+            r: U256::from(1),
+            s: U256::from(2),
+            v: 3,
+        };
+        let verification_data = VerificationData {
+            proving_system: ProvingSystemId::Risc0,
+            proof: bytes_for_verification_data.clone(),
+            pub_input: Some(bytes_for_verification_data.clone()),
+            verification_key: Some(bytes_for_verification_data.clone()),
+            vm_program_code: Some(bytes_for_verification_data),
+            proof_generator_addr,
+        };
+        let chain_id = U256::from(42);
+
+        // Single entry with very high fee - should definitely be viable
+        let nonce = U256::from(1);
+        let high_max_fee = U256::from(1_000_000_000_000_000_000u128); // Very high fee - 1 ETH
+        let nonced_verification_data = NoncedVerificationData::new(
+            verification_data,
+            nonce,
+            high_max_fee,
+            chain_id,
+            payment_service_addr,
+        );
+        let vd_commitment: VerificationDataCommitment = nonced_verification_data.clone().into();
+        let entry = BatchQueueEntry::new_for_testing(
+            nonced_verification_data,
+            vd_commitment,
+            dummy_signature,
+            sender_addr,
+        );
+        let batch_priority = BatchQueueEntryPriority::new(high_max_fee, nonce);
+
+        let mut batch_queue = BatchQueue::new();
+        batch_queue.push(entry, batch_priority);
+
+        let gas_price = U256::from(10_000_000_000u64); // 10 gwei gas price
+        let mut test_queue = batch_queue.clone();
+        let finalized_batch = extract_batch_directly(
+            &mut test_queue,
+            gas_price,
+            5000000, // Large byte size limit
+            50,      // Large proof quantity limit  
+            DEFAULT_CONSTANT_GAS_COST,
+        );
+
+        // This should succeed and return the single proof
+        assert!(finalized_batch.is_ok(), "Should successfully extract batch with single high-fee proof");
+        let batch = finalized_batch.unwrap();
+        assert_eq!(batch.len(), 1, "Batch should contain exactly 1 proof");
+        assert_eq!(batch[0].nonced_verification_data.max_fee, high_max_fee);
+        
+        // The queue should now be empty (no rejected entries to put back)
+        assert_eq!(test_queue.len(), 0, "Queue should be empty after extracting the single viable proof");
+    }
+
+    #[test]
     fn batch_finalization_algorithm_works_not_bigger_than_max_batch_proof_qty() {
         // The following information will be the same for each entry, it is just some dummy data to see
         // algorithm working.
