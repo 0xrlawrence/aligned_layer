@@ -896,7 +896,6 @@ impl Batcher {
             return Ok(());
         }
 
-
         // When pre-verification is enabled, batcher will verify proofs for faster feedback with clients
         if self.pre_verification_is_enabled {
             let verification_data = &nonced_verification_data.verification_data;
@@ -936,11 +935,10 @@ impl Batcher {
                 return Ok(());
             }
         }
-        
+
         // * ---------------------------------------------------------------------*
         // *        Perform validation over batcher queue                         *
         // * ---------------------------------------------------------------------*
-        
 
         let mut batch_state_lock = self.batch_state.lock().await;
         if batch_state_lock.is_queue_full() {
@@ -970,13 +968,19 @@ impl Batcher {
                         let entries_to_check: Vec<_> = batch_state_lock
                             .batch_queue
                             .iter()
-                            .filter(|(entry, _)| entry.sender == candidate_addr && new_proof_fee > entry.nonced_verification_data.max_fee)
+                            .filter(|(entry, _)| {
+                                entry.sender == candidate_addr
+                                    && new_proof_fee > entry.nonced_verification_data.max_fee
+                            })
                             .map(|(entry, _)| entry.clone())
                             .collect();
-                        
+
                         if let Some(target_entry) = entries_to_check.into_iter().next() {
-                            let removed_entry = batch_state_lock.batch_queue.remove(&target_entry).map(|(e, _)| e);
-                            
+                            let removed_entry = batch_state_lock
+                                .batch_queue
+                                .remove(&target_entry)
+                                .map(|(e, _)| e);
+
                             if let Some(removed) = removed_entry {
                                 info!(
                                     "Incoming proof (nonce: {}, fee: {}) replacing proof from sender {} with nonce {} (fee: {})",
@@ -988,8 +992,12 @@ impl Batcher {
                                 );
 
                                 // Update the evicted user's state immediately
-                                self.update_evicted_user_state_with_lock(&removed, &batch_state_lock.batch_queue, &mut user_guard);
-                                
+                                self.update_evicted_user_state_with_lock(
+                                    &removed,
+                                    &batch_state_lock.batch_queue,
+                                    &mut user_guard,
+                                );
+
                                 // Notify the evicted user
                                 if let Some(ref removed_entry_ws) = removed.messaging_sink {
                                     send_message(
@@ -1089,7 +1097,7 @@ impl Batcher {
     ) {
         let replacement_max_fee = nonced_verification_data.max_fee;
         let nonce = nonced_verification_data.nonce;
-        
+
         // Take user state lock first to maintain proper lock ordering
         let user_state = match self.user_states.get(&addr) {
             Some(user_state) => user_state,
@@ -1192,7 +1200,7 @@ impl Batcher {
         // update max_fee_limit and total_fees_in_queue using already held user_state_guard
         let updated_max_fee_limit_in_batch = batch_state_guard.get_user_min_fee_in_batch(&addr);
         user_state_guard.last_max_fee_limit = updated_max_fee_limit_in_batch;
-        
+
         let fee_difference = replacement_max_fee - original_max_fee;
         user_state_guard.total_fees_in_queue += fee_difference;
     }
@@ -1325,7 +1333,7 @@ impl Batcher {
 
         // PHASE 1: Extract the batch directly from the queue to avoid race conditions
         let mut batch_state_lock = batch_state_lock; // Make mutable
-        
+
         let finalized_batch = batch_queue::extract_batch_directly(
             &mut batch_state_lock.batch_queue,
             gas_price,
@@ -1355,7 +1363,6 @@ impl Batcher {
         Some(finalized_batch)
     }
 
-
     /// Updates user states based on current queue state after batch operations.
     /// Used for both successful batch confirmation and failed batch restoration.
     /// Updates proofs_in_batch, total_fees_in_queue, and last_max_fee_limit based on current queue state.
@@ -1369,11 +1376,14 @@ impl Batcher {
             if let Some(user_state) = self.user_states.get(&addr) {
                 let mut user_state_guard = user_state.lock().await; // First: user lock
                 let batch_state_lock = self.batch_state.lock().await; // Second: batch lock
-                
+
                 // Calculate what each user's state should be based on current queue contents
-                let current_queue_user_states = self.calculate_new_user_states_data(&batch_state_lock.batch_queue);
-                
-                if let Some((proof_count, min_max_fee_in_queue, total_fees_in_queue)) = current_queue_user_states.get(&addr) {
+                let current_queue_user_states =
+                    self.calculate_new_user_states_data(&batch_state_lock.batch_queue);
+
+                if let Some((proof_count, min_max_fee_in_queue, total_fees_in_queue)) =
+                    current_queue_user_states.get(&addr)
+                {
                     // User has proofs in queue - use calculated values
                     user_state_guard.proofs_in_batch = *proof_count;
                     user_state_guard.total_fees_in_queue = *total_fees_in_queue;
@@ -1384,7 +1394,7 @@ impl Batcher {
                     user_state_guard.total_fees_in_queue = U256::zero();
                     user_state_guard.last_max_fee_limit = U256::MAX;
                 }
-                
+
                 drop(batch_state_lock); // Release batch lock
                 drop(user_state_guard); // Release user lock
             } else {
@@ -1400,12 +1410,11 @@ impl Batcher {
     /// but now have no proofs left in the queue.
     fn cleanup_user_states_after_successful_submission(&self, finalized_batch: &[BatchQueueEntry]) {
         use std::collections::HashSet;
-        
+
         // Get unique users from the submitted batch
-        let users_in_batch: HashSet<Address> = finalized_batch.iter()
-            .map(|entry| entry.sender)
-            .collect();
-        
+        let users_in_batch: HashSet<Address> =
+            finalized_batch.iter().map(|entry| entry.sender).collect();
+
         // Check current queue state to see which users still have proofs
         let batch_state_lock = match self.batch_state.try_lock() {
             Ok(lock) => lock,
@@ -1415,9 +1424,10 @@ impl Batcher {
                 return;
             }
         };
-        
-        let current_user_states = self.calculate_new_user_states_data(&batch_state_lock.batch_queue);
-        
+
+        let current_user_states =
+            self.calculate_new_user_states_data(&batch_state_lock.batch_queue);
+
         // For each user in the batch, check if they now have no proofs left
         for user_addr in users_in_batch {
             if !current_user_states.contains_key(&user_addr) {
@@ -1439,8 +1449,11 @@ impl Batcher {
     /// - For same fees, higher nonces get evicted first  
     ///   This ensures we never have nonce N+1 without nonce N in the queue.
     async fn restore_proofs_after_batch_failure(&self, failed_batch: &[BatchQueueEntry]) {
-        info!("Restoring {} proofs to queue after batch failure", failed_batch.len());
-        
+        info!(
+            "Restoring {} proofs to queue after batch failure",
+            failed_batch.len()
+        );
+
         let mut batch_state_lock = self.batch_state.lock().await;
         let mut restored_entries = Vec::new();
 
@@ -1462,10 +1475,14 @@ impl Batcher {
                         if let Some((evicted_entry, _)) = batch_state_lock.batch_queue.pop() {
                             warn!("Queue full during restoration, evicting proof from sender {} with nonce {} (fee: {})",
                                 evicted_entry.sender, evicted_entry.nonced_verification_data.nonce, evicted_entry.nonced_verification_data.max_fee);
-                            
+
                             // Update user state for evicted entry
-                            self.update_evicted_user_state_async(&evicted_entry, &batch_state_lock.batch_queue).await;
-                            
+                            self.update_evicted_user_state_async(
+                                &evicted_entry,
+                                &batch_state_lock.batch_queue,
+                            )
+                            .await;
+
                             // Notify the evicted user via websocket
                             if let Some(evicted_ws_sink) = evicted_entry.messaging_sink {
                                 connection::send_message(
@@ -1488,22 +1505,30 @@ impl Batcher {
             restored_entries.push(entry);
         }
 
-        info!("Restored {} proofs to queue, new queue length: {}", restored_entries.len(), batch_state_lock.batch_queue.len());
-        
+        info!(
+            "Restored {} proofs to queue, new queue length: {}",
+            restored_entries.len(),
+            batch_state_lock.batch_queue.len()
+        );
+
         // Get unique users from restored entries
-        let users_with_restored_proofs: std::collections::HashSet<Address> = restored_entries.iter()
-            .map(|entry| entry.sender)
-            .collect();
-            
+        let users_with_restored_proofs: std::collections::HashSet<Address> =
+            restored_entries.iter().map(|entry| entry.sender).collect();
+
         drop(batch_state_lock); // Release batch lock before user state updates
-        
+
         // Update user states for successfully restored proofs
         info!("Updating user states after proof restoration...");
-        if let Err(e) = self.update_user_states_from_queue_state(users_with_restored_proofs).await {
-            error!("Failed to update user states after proof restoration: {:?}", e);
+        if let Err(e) = self
+            .update_user_states_from_queue_state(users_with_restored_proofs)
+            .await
+        {
+            error!(
+                "Failed to update user states after proof restoration: {:?}",
+                e
+            );
         }
     }
-
 
     /// Takes the finalized batch as input and:
     ///     builds the merkle tree
@@ -1610,14 +1635,19 @@ impl Batcher {
         // Note: Proofs were already removed from the queue during extraction phase
         // Now update user states based on current queue state after successful submission
         info!("Updating user states after batch confirmation...");
-        let users_in_batch: std::collections::HashSet<Address> = finalized_batch.iter()
-            .map(|entry| entry.sender)
-            .collect();
-        if let Err(e) = self.update_user_states_from_queue_state(users_in_batch).await {
-            error!("Failed to update user states after batch confirmation: {:?}", e);
+        let users_in_batch: std::collections::HashSet<Address> =
+            finalized_batch.iter().map(|entry| entry.sender).collect();
+        if let Err(e) = self
+            .update_user_states_from_queue_state(users_in_batch)
+            .await
+        {
+            error!(
+                "Failed to update user states after batch confirmation: {:?}",
+                e
+            );
             // Continue with the rest of the process since batch was already submitted successfully
         }
-        
+
         // Clean up user states for users who had proofs in this batch but now have no proofs left
         self.cleanup_user_states_after_successful_submission(finalized_batch);
 
@@ -1694,7 +1724,6 @@ impl Batcher {
             .extract_batch_if_ready(block_number, modified_gas_price)
             .await
         {
-
             let batch_finalization_result = self
                 .finalize_batch(block_number, &finalized_batch, modified_gas_price)
                 .await;
@@ -1705,8 +1734,12 @@ impl Batcher {
 
             // If batch finalization failed, restore the proofs to the queue
             if let Err(e) = batch_finalization_result {
-                error!("Batch finalization failed, restoring proofs to queue: {:?}", e);
-                self.restore_proofs_after_batch_failure(&finalized_batch).await;
+                error!(
+                    "Batch finalization failed, restoring proofs to queue: {:?}",
+                    e
+                );
+                self.restore_proofs_after_batch_failure(&finalized_batch)
+                    .await;
                 return Err(e);
             }
         }
