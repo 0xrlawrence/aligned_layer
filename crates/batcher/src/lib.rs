@@ -289,7 +289,6 @@ impl Batcher {
                 .aggregator_fee_percentage_multiplier,
             aggregator_gas_cost: config.batcher.aggregator_gas_cost,
             posting_batch: Mutex::new(false),
-            batch_processing_lock: RwLock::new(()),
             batch_state: Mutex::new(batch_state),
             user_states,
             disabled_verifiers: Mutex::new(disabled_verifiers),
@@ -866,7 +865,8 @@ impl Batcher {
         // In this case, the message might be a replacement one. If it is valid,
         // we replace the old entry with the new from the replacement message.
         // Notice this stops the normal flow of the handle_submit_proof.
-        // locks will be taken inside this function
+        // We pass the already-held user_state_guard to avoid double-locking
+        // This will take the batch lock internally
         if expected_nonce > msg_nonce {
             info!("Possible replacement message received: Expected nonce {expected_nonce:?} - message nonce: {msg_nonce:?}");
             self.handle_replacement_message(
@@ -874,6 +874,7 @@ impl Batcher {
                 ws_conn_sink.clone(),
                 client_msg.signature,
                 addr,
+                user_state_guard,
             )
             .await;
 
@@ -1091,25 +1092,10 @@ impl Batcher {
         ws_conn_sink: WsMessageSink,
         signature: Signature,
         addr: Address,
+        mut user_state_guard: tokio::sync::MutexGuard<'_, UserState>,
     ) {
         let replacement_max_fee = nonced_verification_data.max_fee;
         let nonce = nonced_verification_data.nonce;
-
-        // Take user state lock first to maintain proper lock ordering
-        let user_state = match self.user_states.get(&addr) {
-            Some(user_state) => user_state,
-            None => {
-                warn!("User state not found for address {addr} during replacement message");
-                send_message(
-                    ws_conn_sink.clone(),
-                    SubmitProofResponseMessage::InvalidNonce,
-                )
-                .await;
-                self.metrics.user_error(&["invalid_nonce", ""]);
-                return;
-            }
-        };
-        let mut user_state_guard = user_state.lock().await; // First: user lock
         let mut batch_state_guard = self.batch_state.lock().await; // Second: batch lock
         let Some(entry) = batch_state_guard.get_entry(addr, nonce) else {
             drop(batch_state_guard);
