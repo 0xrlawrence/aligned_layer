@@ -201,16 +201,19 @@ pub(crate) fn extract_batch_directly(
         return Err(BatcherError::BatchCostTooHigh);
     }
 
-    // Extract the batch entries (the ones that will pay enough)
-    let batch_entries = batch_queue.clone().into_sorted_vec();
-    batch_queue.clear();
+    // Extract remaining entries in sorted order
+    // Since pop() gives highest priority first, we collect them directly
+    let mut batch_for_posting = Vec::new();
+    while let Some((entry, _)) = batch_queue.pop() {
+        batch_for_posting.push(entry);
+    }
 
     // Put back the rejected entries (they stay in the queue for later)
     for (entry, priority) in rejected_entries {
         batch_queue.push(entry, priority);
     }
 
-    Ok(batch_entries)
+    Ok(batch_for_posting)
 }
 
 fn calculate_fee_per_proof(batch_len: usize, gas_price: U256, constant_gas_cost: u128) -> U256 {
