@@ -847,18 +847,25 @@ mod test {
             &mut test_queue,
             gas_price,
             5000000, // Large byte size limit
-            50,      // Large proof quantity limit  
+            50,      // Large proof quantity limit
             DEFAULT_CONSTANT_GAS_COST,
         );
 
         // This should succeed and return the single proof
-        assert!(finalized_batch.is_ok(), "Should successfully extract batch with single high-fee proof");
+        assert!(
+            finalized_batch.is_ok(),
+            "Should successfully extract batch with single high-fee proof"
+        );
         let batch = finalized_batch.unwrap();
         assert_eq!(batch.len(), 1, "Batch should contain exactly 1 proof");
         assert_eq!(batch[0].nonced_verification_data.max_fee, high_max_fee);
-        
+
         // The queue should now be empty (no rejected entries to put back)
-        assert_eq!(test_queue.len(), 0, "Queue should be empty after extracting the single viable proof");
+        assert_eq!(
+            test_queue.len(),
+            0,
+            "Queue should be empty after extracting the single viable proof"
+        );
     }
 
     #[test]

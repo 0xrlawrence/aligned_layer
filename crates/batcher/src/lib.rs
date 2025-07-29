@@ -103,7 +103,7 @@ pub struct Batcher {
     ///   needs to be stopped, and all user_states locks need to be taken
     batch_state: Mutex<BatchState>,
     user_states: DashMap<Address, Arc<Mutex<UserState>>>,
-    
+
     last_uploaded_batch_block: Mutex<u64>,
 
     /// This is used to avoid multiple batches being submitted at the same time
@@ -708,7 +708,6 @@ impl Batcher {
         client_msg: Box<SubmitProofMessage>,
         ws_conn_sink: WsMessageSink,
     ) -> Result<(), Error> {
-
         let msg_nonce = client_msg.verification_data.nonce;
         debug!("Received message with nonce: {msg_nonce:?}");
         self.metrics.received_proofs.inc();
@@ -1526,7 +1525,6 @@ impl Batcher {
         finalized_batch: &[BatchQueueEntry],
         gas_price: U256,
     ) -> Result<(), BatcherError> {
-
         let nonced_batch_verifcation_data: Vec<NoncedVerificationData> = finalized_batch
             .iter()
             .map(|entry| entry.nonced_verification_data.clone())
