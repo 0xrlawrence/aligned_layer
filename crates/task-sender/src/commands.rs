@@ -5,7 +5,7 @@ use aligned_sdk::verification_layer::{
 use ethers::prelude::*;
 use ethers::utils::parse_ether;
 use k256::ecdsa::SigningKey;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use std::fs::{self, File};
@@ -149,70 +149,273 @@ pub async fn generate_and_fund_wallets(args: GenerateAndFundWalletsArgs) {
         .expect("Invalid private key")
         .with_chain_id(chain_id.as_u64());
 
-    for i in 0..args.number_of_wallets {
-        // this is necessary because of the move
-        let eth_rpc_provider = eth_rpc_provider.clone();
-        let funding_wallet = funding_wallet.clone();
-        let amount_to_deposit = args.amount_to_deposit.clone();
-        let amount_to_deposit_aligned = args.amount_to_deposit_to_aligned.clone();
+    // Generate all wallets first
+    let mut wallets = Vec::new();
+    let mut wallet_private_keys = Vec::new();
 
-        // Generate new wallet
+    info!("Generating {} wallets...", args.number_of_wallets);
+    for i in 0..args.number_of_wallets {
         let wallet = Wallet::new(&mut thread_rng()).with_chain_id(chain_id.as_u64());
         info!("Generated wallet {} with address {:?}", i, wallet.address());
 
-        // Fund the wallet
-        let signer = SignerMiddleware::new(eth_rpc_provider.clone(), funding_wallet.clone());
-        let amount_to_deposit =
-            parse_ether(&amount_to_deposit).expect("Ether format should be: XX.XX");
-        info!("Depositing {}wei to wallet {}", amount_to_deposit, i);
-        let tx = TransactionRequest::new()
-            .from(funding_wallet.address())
-            .to(wallet.address())
-            .value(amount_to_deposit);
-
-        let pending_transaction = match signer.send_transaction(tx, None).await {
-            Ok(tx) => tx,
-            Err(err) => {
-                error!("Could not fund wallet {}", err);
-                return;
-            }
-        };
-        if let Err(err) = pending_transaction.await {
-            error!("Could not fund wallet {}", err);
-        }
-        info!("Wallet {} funded", i);
-
-        // Deposit to aligned
-        let amount_to_deposit_to_aligned =
-            parse_ether(&amount_to_deposit_aligned).expect("Ether format should be: XX.XX");
-        info!(
-            "Depositing {}wei to aligned {}",
-            amount_to_deposit_to_aligned, i
-        );
-        let signer = SignerMiddleware::new(eth_rpc_provider.clone(), wallet.clone());
-        if let Err(err) = deposit_to_aligned(
-            amount_to_deposit_to_aligned,
-            signer,
-            args.network.clone().into(),
-        )
-        .await
-        {
-            error!("Could not deposit to aligned, err: {:?}", err);
-            return;
-        }
-        info!("Successfully deposited to aligned for wallet {}", i);
-
-        // Store private key
-        info!("Storing private key");
         let signer_bytes = wallet.signer().to_bytes();
         let secret_key_hex = ethers::utils::hex::encode(signer_bytes);
-
-        if let Err(err) = writeln!(file, "{}", secret_key_hex) {
-            error!("Could not store private key: {}", err);
-        } else {
-            info!("Private key {} stored", i);
-        }
+        wallet_private_keys.push(secret_key_hex);
+        wallets.push(wallet);
     }
+
+    // Get base nonce for funding wallet to avoid nonce conflicts
+    let mut current_nonce = match eth_rpc_provider
+        .get_transaction_count(
+            funding_wallet.address(),
+            Some(ethers::types::BlockNumber::Pending.into()),
+        )
+        .await
+    {
+        Ok(nonce) => nonce,
+        Err(err) => {
+            error!("Could not get base nonce for funding wallet: {}", err);
+            return;
+        }
+    };
+
+    let batch_size = 25;
+    let amount_to_deposit =
+        parse_ether(&args.amount_to_deposit).expect("Ether format should be: XX.XX");
+    let amount_to_deposit_to_aligned =
+        parse_ether(&args.amount_to_deposit_to_aligned).expect("Ether format should be: XX.XX");
+
+    let mut total_successful = 0;
+    let total_batches = args.number_of_wallets.div_ceil(batch_size);
+
+    // Process wallets in batches
+    for (batch_idx, wallet_chunk) in wallets.chunks(batch_size).enumerate() {
+        info!(
+            "Processing batch {} of {} ({} wallets)...",
+            batch_idx + 1,
+            total_batches,
+            wallet_chunk.len()
+        );
+
+        // Refresh nonce for each batch to avoid stale nonce issues
+        current_nonce = match eth_rpc_provider
+            .get_transaction_count(
+                funding_wallet.address(),
+                Some(ethers::types::BlockNumber::Pending.into()),
+            )
+            .await
+        {
+            Ok(nonce) => {
+                info!("Batch {}: Using fresh nonce {}", batch_idx + 1, nonce);
+                nonce
+            }
+            Err(err) => {
+                error!("Could not get fresh nonce for batch {}: {}", batch_idx + 1, err);
+                current_nonce // Use previous nonce as fallback
+            }
+        };
+
+        // ETH funding phase for this batch
+        info!(
+            "Batch {}: Starting ETH funding transactions...",
+            batch_idx + 1
+        );
+        let mut eth_funding_handles = Vec::new();
+
+        for (chunk_idx, wallet) in wallet_chunk.iter().enumerate() {
+            let global_idx = batch_idx * batch_size + chunk_idx;
+            let eth_rpc_provider = eth_rpc_provider.clone();
+            let funding_wallet = funding_wallet.clone();
+            let wallet_address = wallet.address();
+            let nonce = current_nonce + U256::from(chunk_idx);
+
+            let handle = tokio::spawn(async move {
+
+                info!(
+                    "Submitting ETH funding transaction for wallet {} with nonce {}",
+                    global_idx, nonce
+                );
+                let signer = SignerMiddleware::new(eth_rpc_provider, funding_wallet.clone());
+                
+                // Get current gas price and bump it by 20% to avoid replacement issues
+                let base_gas_price = match signer.provider().get_gas_price().await {
+                    Ok(price) => price,
+                    Err(_) => U256::from(20_000_000_000u64), // 20 gwei fallback
+                };
+                let bumped_gas_price = base_gas_price * 120 / 100; // 20% bump
+                
+                let tx = TransactionRequest::new()
+                    .from(funding_wallet.address())
+                    .to(wallet_address)
+                    .value(amount_to_deposit)
+                    .nonce(nonce)
+                    .gas_price(bumped_gas_price);
+
+                let result = {
+                    match signer.send_transaction(tx, None).await {
+                        Ok(pending_tx) => {
+                            info!(
+                                "ETH funding transaction submitted for wallet {}",
+                                global_idx
+                            );
+                            pending_tx.await
+                        }
+                        Err(err) => {
+                            error!(
+                                "Could not submit ETH funding transaction for wallet {}: {}",
+                                global_idx, err
+                            );
+                            return None;
+                        }
+                    }
+                };
+
+                match result {
+                    Ok(receipt) => {
+                        if let Some(receipt) = receipt {
+                            info!(
+                                "ETH funding confirmed for wallet {} (tx: {:?})",
+                                global_idx, receipt.transaction_hash
+                            );
+                        } else {
+                            info!(
+                                "ETH funding confirmed for wallet {} (no receipt)",
+                                global_idx
+                            );
+                        }
+                        Some(global_idx)
+                    }
+                    Err(err) => {
+                        error!("ETH funding failed for wallet {}: {}", global_idx, err);
+                        None
+                    }
+                }
+            });
+            eth_funding_handles.push(handle);
+        }
+
+        // Wait for ETH funding to complete
+        let mut funded_indices = Vec::new();
+        for handle in eth_funding_handles {
+            if let Ok(Some(idx)) = handle.await {
+                funded_indices.push(idx);
+            }
+        }
+
+        info!(
+            "Batch {}: ETH funding completed for {} out of {} wallets",
+            batch_idx + 1,
+            funded_indices.len(),
+            wallet_chunk.len()
+        );
+
+        if funded_indices.is_empty() {
+            warn!(
+                "Batch {}: No wallets were funded, skipping Aligned deposits",
+                batch_idx + 1
+            );
+            current_nonce += U256::from(wallet_chunk.len());
+            continue;
+        }
+
+        // Aligned deposit phase for funded wallets in this batch
+        info!(
+            "Batch {}: Starting Aligned deposit transactions...",
+            batch_idx + 1
+        );
+        let mut aligned_deposit_handles = Vec::new();
+
+        for &idx in &funded_indices {
+            let wallet = wallets[idx].clone();
+            let eth_rpc_provider = eth_rpc_provider.clone();
+            let network = args.network.clone();
+
+            let handle = tokio::spawn(async move {
+
+                info!("Submitting Aligned deposit for wallet {}", idx);
+                let signer = SignerMiddleware::new(eth_rpc_provider, wallet);
+
+                match deposit_to_aligned(amount_to_deposit_to_aligned, signer, network.into()).await
+                {
+                    Ok(_) => {
+                        info!("Successfully deposited to aligned for wallet {}", idx);
+                        Ok(idx)
+                    }
+                    Err(err) => {
+                        error!("Could not deposit to aligned for wallet {}: {:?}", idx, err);
+                        Err(idx)
+                    }
+                }
+            });
+            aligned_deposit_handles.push(handle);
+        }
+
+        // Wait for Aligned deposits to complete and write private keys immediately
+        let mut batch_successful = 0;
+        for handle in aligned_deposit_handles {
+            if let Ok(Ok(idx)) = handle.await {
+                let wallet_address = wallets[idx].address();
+                let private_key = &wallet_private_keys[idx];
+                
+                // Write to original file (private key only) for compatibility
+                if let Err(err) = writeln!(file, "{}", private_key) {
+                    error!("Could not store private key for wallet {}: {}", idx, err);
+                    continue;
+                }
+                
+                // Write to new file (private_key;address format)
+                let detailed_filepath = format!("{}.detailed", args.private_keys_filepath);
+                let detailed_file = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&detailed_filepath);
+                
+                match detailed_file {
+                    Ok(mut f) => {
+                        if let Err(err) = writeln!(f, "{};{:?}", private_key, wallet_address) {
+                            error!("Could not store detailed info for wallet {}: {}", idx, err);
+                        } else {
+                            info!("Wallet {} stored: private key and address saved", idx);
+                            batch_successful += 1;
+                        }
+                    }
+                    Err(err) => {
+                        error!("Could not open detailed file {}: {}", detailed_filepath, err);
+                        // Still count as successful since main file was written
+                        info!("Private key for wallet {} stored (detailed file failed)", idx);
+                        batch_successful += 1;
+                    }
+                }
+            }
+        }
+
+        total_successful += batch_successful;
+        current_nonce += U256::from(wallet_chunk.len());
+
+        info!(
+            "Batch {} completed: {} wallets successfully funded and deposited (Total: {} / {})",
+            batch_idx + 1,
+            batch_successful,
+            total_successful,
+            args.number_of_wallets
+        );
+
+        // Optional: Small delay between batches (commented out for speed)
+        // if batch_idx + 1 < total_batches {
+        //     tokio::time::sleep(Duration::from_millis(50)).await;
+        // }
+    }
+
+    info!(
+        "All batches completed! Successfully created and funded {} wallets out of {} requested",
+        total_successful, args.number_of_wallets
+    );
+    info!(
+        "Private keys for {} successful wallets stored in:",
+        total_successful
+    );
+    info!("  - {} (private keys only, for compatibility)", args.private_keys_filepath);
+    info!("  - {}.detailed (private_key;address format)", args.private_keys_filepath);
 }
 
 /// infinitely hangs connections
