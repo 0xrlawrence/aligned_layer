@@ -37,3 +37,6 @@ witness.wtns
 *.zkey
 circuit_cpp/
 circuit_js
+
+# Link checker results
+docs/dead_links_report.txt
