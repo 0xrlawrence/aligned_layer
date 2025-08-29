@@ -52,7 +52,7 @@
       ansible.builtin.git:
         repo: https://github.com/yetanotherco/aligned_layer.git
         dest: /home/{{ ansible_user }}/repos/batcher/aligned_layer
-        version: v0.10.2
+        version: 2065-feat-sepolia-deployment
         recursive: false
 
     # Build the batcher
@@ -66,7 +66,7 @@
     - name: Install batcher
       make:
         chdir: /home/{{ ansible_user }}/repos/batcher/aligned_layer
-        target: install_batcher
+        target: batcher_install
       environment:
         PATH: "{{ ansible_env.PATH }}:/usr/local/go/bin:/home/{{ ansible_user }}/.cargo/bin"
 
@@ -118,13 +118,6 @@
         ansible_ssh_user: "{{ admin_user }}"
         batcher_domain: "{{ lookup('ini', 'batcher_domain', file='ini/caddy-batcher.ini') }}"
 
-    - name: Copy keystore to server
-      ansible.builtin.copy:
-        src: '{{ keystore_path }}'
-        dest: /home/{{ ansible_user }}/.keystores/batcher
-        owner: '{{ ansible_user }}'
-        group: '{{ ansible_user }}'
-
     - name: Start Batcher service
       ansible.builtin.systemd_service:
         name: batcher
@@ -139,8 +132,3 @@
         state: restarted
       vars:
         ansible_ssh_user: "{{ admin_user }}"
-
-    - name: Run node_exporter playbook
-      ansible.builtin.import_playbook: node_exporter.yaml
-      vars:
-        host: batcher
