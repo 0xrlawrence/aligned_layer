@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 
@@ -329,21 +330,36 @@ func (o *Operator) ProcessNewBatchLogV3(newBatchLog *servicemanager.ContractAlig
 
 	verificationDataBatchLen := len(verificationDataBatch)
 	results := make(chan bool, verificationDataBatchLen)
-	var wg sync.WaitGroup
-	wg.Add(verificationDataBatchLen)
+	jobs := make(chan VerificationData, verificationDataBatchLen)
+
 	disabledVerifiersBitmap, err := o.avsReader.DisabledVerifiers()
 	if err != nil {
 		o.Logger.Errorf("Could not check verifiers status: %s", err)
 		results <- false
 		return err
 	}
-	for _, verificationData := range verificationDataBatch {
-		go func(data VerificationData) {
-			defer wg.Done()
-			o.verify(data, disabledVerifiersBitmap, results)
-			o.metrics.IncOperatorTaskResponses()
-		}(verificationData)
+
+	maxWorkers := runtime.NumCPU() - 1
+	if maxWorkers < 1 {
+		maxWorkers = 1
 	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < maxWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for data := range jobs {
+				o.verify(data, disabledVerifiersBitmap, results)
+				o.metrics.IncOperatorTaskResponses()
+			}
+		}()
+	}
+
+	for _, verificationData := range verificationDataBatch {
+		jobs <- verificationData
+	}
+	close(jobs)
 
 	go func() {
 		wg.Wait()
