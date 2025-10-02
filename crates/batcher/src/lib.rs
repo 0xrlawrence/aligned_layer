@@ -2053,6 +2053,24 @@ impl Batcher {
                     warn!("User {:?} has insufficient balance, flushing entire queue as safety measure", address);
 
                     self.flush_queue_and_clear_nonce_cache().await;
+
+                    for entry in finalized_batch {
+                        if let Some(ws_sink) = entry.messaging_sink.as_ref() {
+                            tokio::spawn(send_message(
+                                ws_sink.clone(),
+                                SubmitProofResponseMessage::BatchReset,
+                            ));
+                        } else {
+                            warn!(
+                                "Websocket sink was found empty. This should only happen in tests"
+                            );
+                        }
+                    }
+
+                    return Err(BatcherError::StateCorruptedAndFlushed(format!(
+                        "Queue and user states flushed due to insufficient balance for user {:?}",
+                        address
+                    )));
                 }
                 _ => {
                     // Add more cases here if we want in the future
@@ -2090,7 +2108,10 @@ impl Batcher {
         let mut batch_state_lock = self.batch_state.lock().await;
         for (entry, _) in batch_state_lock.batch_queue.iter() {
             if let Some(ws_sink) = entry.messaging_sink.as_ref() {
-                send_message(ws_sink.clone(), SubmitProofResponseMessage::BatchReset).await;
+                tokio::spawn(send_message(
+                    ws_sink.clone(),
+                    SubmitProofResponseMessage::BatchReset,
+                ));
             } else {
                 warn!("Websocket sink was found empty. This should only happen in tests");
             }
@@ -2179,12 +2200,19 @@ impl Batcher {
 
             // If batch finalization failed, restore the proofs to the queue
             if let Err(e) = batch_finalization_result {
-                error!(
-                    "Batch finalization failed, restoring proofs to queue: {:?}",
-                    e
-                );
-                self.restore_proofs_after_batch_failure(&finalized_batch)
-                    .await;
+                error!("Batch finalization failed: {:?}", e);
+
+                // If the queue was flushed, don't recover
+                match &e {
+                    BatcherError::StateCorruptedAndFlushed(_) => {
+                        info!("State was corrupted and flushed - not restoring proofs");
+                    }
+                    _ => {
+                        info!("Restoring proofs to queue after batch failure");
+                        self.restore_proofs_after_batch_failure(&finalized_batch)
+                            .await;
+                    }
+                }
                 return Err(e);
             }
         }
