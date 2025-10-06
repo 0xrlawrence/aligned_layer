@@ -166,6 +166,7 @@ enum NetworkNameArg {
     Holesky,
     HoleskyStage,
     Mainnet,
+    Sepolia,
 }
 
 impl FromStr for NetworkNameArg {
@@ -177,8 +178,9 @@ impl FromStr for NetworkNameArg {
             "holesky" => Ok(NetworkNameArg::Holesky),
             "holesky-stage" => Ok(NetworkNameArg::HoleskyStage),
             "mainnet" => Ok(NetworkNameArg::Mainnet),
+            "sepolia" => Ok(NetworkNameArg::Sepolia),
             _ => Err(
-                "Unknown network. Possible values: devnet, holesky, holesky-stage, mainnet"
+                "Unknown network. Possible values: devnet, holesky, holesky-stage, mainnet, sepolia"
                     .to_string(),
             ),
         }
@@ -191,7 +193,7 @@ pub struct NetworkArg {
         name = "The working network's name",
         long = "network",
         default_value = "devnet",
-        help = "[possible values: devnet, holesky, holesky-stage, mainnet]"
+        help = "[possible values: devnet, holesky, holesky-stage, mainnet, sepolia]"
     )]
     network: Option<NetworkNameArg>,
     #[arg(
@@ -241,6 +243,7 @@ impl From<NetworkArg> for Network {
             Some(NetworkNameArg::Holesky) => Network::Holesky,
             Some(NetworkNameArg::HoleskyStage) => Network::HoleskyStage,
             Some(NetworkNameArg::Mainnet) => Network::Mainnet,
+            Some(NetworkNameArg::Sepolia) => Network::Sepolia,
         }
     }
 }

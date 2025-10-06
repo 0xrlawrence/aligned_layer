@@ -748,6 +748,18 @@ task_sender_test_connections_holesky_stage:
 	--num-senders $(NUM_SENDERS) \
 	--network holesky-stage
 
+# ===== SEPOLIA =====
+task_sender_generate_and_fund_wallets_sepolia:
+	@cd crates/task-sender && \
+	cargo run --release -- generate-and-fund-wallets \
+	--eth-rpc-url https://ethereum-sepolia-rpc.publicnode.com \
+	--network sepolia \
+	--funding-wallet-private-key $(FUNDING_WALLET_PRIVATE_KEY) \
+	--number-wallets $(NUM_WALLETS) \
+	--amount-to-deposit $(AMOUNT_TO_DEPOSIT) \
+	--amount-to-deposit-to-aligned $(AMOUNT_TO_DEPOSIT_TO_ALIGNED) \
+	--private-keys-filepath $(CURDIR)/crates/task-sender/wallets/sepolia
+
 __UTILS__:
 aligned_get_user_balance_devnet:
 	@cd crates/cli/ && cargo run --release -- get-user-balance \
