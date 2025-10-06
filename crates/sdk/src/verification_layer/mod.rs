@@ -5,7 +5,7 @@ use crate::{
             DEFAULT_MAX_FEE_BATCH_SIZE, GAS_PRICE_PERCENTAGE_MULTIPLIER,
             INSTANT_MAX_FEE_BATCH_SIZE, PERCENTAGE_DIVIDER,
         },
-        errors::{self, GetNonceError},
+        errors::{self, GetNonceError, PaymentError},
         types::{
             AlignedVerificationData, ClientMessage, FeeEstimationType, GetNonceResponseMessage,
             Network, ProvingSystemId, VerificationData,
@@ -19,7 +19,7 @@ use crate::{
     },
     eth::{
         aligned_service_manager::aligned_service_manager,
-        batcher_payment_service::batcher_payment_service,
+        batcher_payment_service::{batcher_payment_service, BatcherPaymentServiceWithSigner},
     },
 };
 
@@ -747,6 +747,162 @@ pub async fn get_balance_in_aligned(
             Ok(result)
         }
         Err(e) => Err(errors::BalanceError::EthereumCallError(e.to_string())),
+    }
+}
+
+/// Unlocks the balance of a user in the Aligned payment service.
+///
+/// This function initiates an unlock request for the user's balance. After calling this function,
+/// the user's balance will be locked for a certain period before it can be withdrawn.
+/// Use [`get_unlock_block_time`] to check when the balance can be withdrawn.
+///
+/// # Arguments
+/// * `signer` - The signer middleware containing the user's wallet and provider.
+/// * `network` - The network on which the unlock operation will be performed.
+///
+/// # Returns
+/// * The transaction receipt of the unlock operation.
+///
+/// # Errors
+/// * `SendError` if there is an error sending the transaction.
+/// * `SubmitError` if there is an error submitting the transaction.
+pub async fn unlock_balance_in_aligned(
+    signer: &SignerMiddleware<Provider<Http>, LocalWallet>,
+    network: Network,
+) -> Result<ethers::types::TransactionReceipt, errors::PaymentError> {
+    let payment_service_address = network.get_batcher_payment_service_address();
+    let payment_service =
+        BatcherPaymentServiceWithSigner::new(payment_service_address, signer.clone().into());
+
+    let receipt = payment_service
+        .unlock()
+        .send()
+        .await
+        .map_err(|e| PaymentError::SendError(e.to_string()))?
+        .await
+        .map_err(|e| PaymentError::SubmitError(e.to_string()))?;
+
+    match receipt {
+        Some(hash) => Ok(hash),
+        None => Err(PaymentError::SubmitError("".into())),
+    }
+}
+
+/// Locks the balance of a user in the Aligned payment service.
+///
+/// This function locks the user's balance, preventing it from being withdrawn.
+/// Locked balances can be used for proof verification payments but cannot be withdrawn
+/// until they are unlocked using [`unlock_balance_in_aligned`] and the unlock period expires.
+///
+/// # Arguments
+/// * `signer` - The signer middleware containing the user's wallet and provider.
+/// * `network` - The network on which the lock operation will be performed.
+///
+/// # Returns
+/// * The transaction receipt of the lock operation.
+///
+/// # Errors
+/// * `SendError` if there is an error sending the transaction.
+/// * `SubmitError` if there is an error submitting the transaction.
+pub async fn lock_balance_in_aligned(
+    signer: &SignerMiddleware<Provider<Http>, LocalWallet>,
+    network: Network,
+) -> Result<ethers::types::TransactionReceipt, errors::PaymentError> {
+    let payment_service_address = network.get_batcher_payment_service_address();
+    let payment_service =
+        BatcherPaymentServiceWithSigner::new(payment_service_address, signer.clone().into());
+
+    let receipt = payment_service
+        .lock()
+        .send()
+        .await
+        .map_err(|e| PaymentError::SendError(e.to_string()))?
+        .await
+        .map_err(|e| PaymentError::SubmitError(e.to_string()))?;
+
+    match receipt {
+        Some(hash) => Ok(hash),
+        None => Err(PaymentError::SubmitError("".into())),
+    }
+}
+
+/// Returns the timestamp when a user's balance will be unlocked and available for withdrawal.
+///
+/// After calling [`unlock_balance_in_aligned`], users must wait for the lock period
+/// before they can withdraw their funds using [`withdraw_balance_from_aligned`].
+///
+/// # Arguments
+/// * `user` - The address of the user to check the unlock time for.
+/// * `eth_rpc_url` - The URL of the Ethereum RPC node.
+/// * `network` - The network on which to check the unlock time.
+///
+/// # Returns
+/// * The timestamp when the user's balance will be unlocked (as u64).
+///
+/// # Errors
+/// * `EthereumProviderError` if there is an error in the connection with the RPC provider.
+/// * `EthereumCallError` if there is an error in the Ethereum call.
+pub async fn get_unlock_block_time(
+    user: Address,
+    eth_rpc_url: &str,
+    network: Network,
+) -> Result<u64, errors::BalanceError> {
+    let eth_rpc_provider = Provider::<Http>::try_from(eth_rpc_url)
+        .map_err(|e| errors::BalanceError::EthereumProviderError(e.to_string()))?;
+
+    let payment_service_address = network.get_batcher_payment_service_address();
+
+    match batcher_payment_service(eth_rpc_provider, payment_service_address).await {
+        Ok(batcher_payment_service) => {
+            let call = batcher_payment_service.user_unlock_block(user);
+
+            let result = call
+                .call()
+                .await
+                .map_err(|e| errors::BalanceError::EthereumCallError(e.to_string()))?;
+
+            Ok(result.as_u64())
+        }
+        Err(e) => Err(errors::BalanceError::EthereumCallError(e.to_string())),
+    }
+}
+
+/// Withdraws a specified amount from the user's balance in the Aligned payment service.
+///
+/// This function can only be called after the balance has been unlocked using [`unlock_balance_in_aligned`]
+/// and the lock period has expired. Use [`get_unlock_block_time`] to check when the withdrawal becomes available.
+///
+/// # Arguments
+/// * `signer` - The signer middleware containing the user's wallet and provider.
+/// * `network` - The network on which the withdrawal will be performed.
+/// * `amount` - The amount to withdraw from the user's balance.
+///
+/// # Returns
+/// * The transaction receipt of the withdrawal operation.
+///
+/// # Errors
+/// * `SendError` if there is an error sending the transaction.
+/// * `SubmitError` if there is an error submitting the transaction.
+pub async fn withdraw_balance_from_aligned(
+    signer: &SignerMiddleware<Provider<Http>, LocalWallet>,
+    network: Network,
+    amount: U256,
+) -> Result<ethers::types::TransactionReceipt, errors::PaymentError> {
+    let payment_service_address = network.get_batcher_payment_service_address();
+    let payment_service =
+        BatcherPaymentServiceWithSigner::new(payment_service_address, signer.clone().into());
+
+    let receipt = payment_service
+        .withdraw(amount)
+        .send()
+        .await
+        .map_err(|e| PaymentError::SendError(e.to_string()))?
+        .await
+        .map_err(|e| PaymentError::SubmitError(e.to_string()))?;
+
+    match receipt {
+        Some(hash) => Ok(hash),
+        None => Err(PaymentError::SubmitError("".into())),
     }
 }
 
