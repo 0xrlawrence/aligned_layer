@@ -51,6 +51,8 @@ pub enum ProvingSystemId {
     SP1,
     Risc0,
     CircomGroth16Bn256,
+    Mina,
+    MinaAccount,
 }
 
 impl Display for ProvingSystemId {
@@ -62,6 +64,8 @@ impl Display for ProvingSystemId {
             ProvingSystemId::SP1 => write!(f, "SP1"),
             ProvingSystemId::Risc0 => write!(f, "Risc0"),
             ProvingSystemId::CircomGroth16Bn256 => write!(f, "CircomGroth16Bn256"),
+            ProvingSystemId::Mina => write!(f, "Mina"),
+            ProvingSystemId::MinaAccount => write!(f, "MinaAccount"),
         }
     }
 }
