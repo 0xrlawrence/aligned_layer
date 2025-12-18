@@ -341,6 +341,9 @@ agg_mode_gateway_send_sp1_proof:
 		--vk scripts/test_files/sp1/sp1_fibonacci_5_0_0_vk.bin \
 		--private-key "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
 
+agg_mode_get_quotas:
+	curl -X GET http://127.0.0.1:8089/quotas/0x70997970C51812dc3A010C7d01b50e0d17dc79C8
+
 __AGGREGATOR__: ## ____
 
 aggregator_start: ## Start the Aggregator. Parameters: ENVIRONMENT=<devnet|testnet|mainnet>, AGG_CONFIG_FILE
