@@ -37,3 +37,10 @@ scrape_configs:
       - targets: ["host.docker.internal:9100"]
         labels:
           bot: "node-exporter"
+
+  - job_name: "gateway-api"
+    scrape_interval: 60s
+    static_configs:
+      - targets: ["host.docker.internal:8089"]
+        labels:
+          bot: "gateway-exporter"

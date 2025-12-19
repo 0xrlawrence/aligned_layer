@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     str::FromStr,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -8,6 +9,7 @@ use actix_web::{
     web::{self, Data},
     App, HttpRequest, HttpResponse, HttpServer, Responder,
 };
+use actix_web_prometheus::PrometheusMetricsBuilder;
 use agg_mode_sdk::types::Network;
 use aligned_sdk::aggregation_layer::AggregationModeProvingSystem;
 use alloy::signers::Signature;
@@ -23,6 +25,7 @@ use crate::{
     config::Config,
     db::Db,
     helpers::get_time_left_day_formatted,
+    metrics::GatewayMetrics,
     types::{GetReceiptsResponse, SubmitProofRequestRisc0, SubmitProofRequestSP1},
     verifiers::{verify_sp1_proof, VerificationError},
 };
@@ -32,15 +35,22 @@ pub struct GatewayServer {
     db: Db,
     config: Config,
     network: Network,
+    metrics: GatewayMetrics,
 }
 
 impl GatewayServer {
     pub fn new(db: Db, config: Config) -> Self {
         let network = Network::from_str(&config.network).expect("A valid network in config file");
+
+        tracing::info!("Starting metrics server on port {}", config.metrics_port);
+        let metrics =
+            GatewayMetrics::start(config.metrics_port).expect("Failed to start metrics server");
+
         Self {
             db,
             config,
             network,
+            metrics,
         }
     }
 
@@ -49,10 +59,19 @@ impl GatewayServer {
         let port = self.config.port;
         let state = self.clone();
 
+        let mut labels = HashMap::new();
+        labels.insert("label1".to_string(), "value1".to_string());
+        let prometheus = PrometheusMetricsBuilder::new("api")
+            .endpoint("/metrics")
+            .const_labels(labels)
+            .build()
+            .unwrap();
+
         tracing::info!("Starting server at port {}", self.config.port);
         HttpServer::new(move || {
             App::new()
                 .app_data(Data::new(state.clone()))
+                .wrap(prometheus.clone())
                 .route("/nonce/{address}", web::get().to(Self::get_nonce))
                 .route("/receipts", web::get().to(Self::get_receipts))
                 .route("/proof/sp1", web::post().to(Self::post_proof_sp1))
