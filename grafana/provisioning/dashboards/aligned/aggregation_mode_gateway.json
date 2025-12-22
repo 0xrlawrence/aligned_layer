@@ -106,7 +106,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(\n  rate(api_response_code{statuscode=~\"400\"}[100m])\n)",
+          "expr": "sum(\n  rate(api_response_code{statuscode=~\"4..\"}[100m])\n)",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -200,7 +200,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "api_response_code{statuscode=\"500\"}",
+          "expr": "sum(\n  rate(api_response_code{statuscode=~\"5..\"}[100m])\n)",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -294,7 +294,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "success_response_count{}",
+          "expr": "sum(\n  rate(api_response_code{statuscode=~\"2..\"}[100m])\n)",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -305,7 +305,7 @@
       "type": "timeseries"
     }
   ],
-  "refresh": false,
+  "refresh": "",
   "schemaVersion": 38,
   "style": "dark",
   "tags": [],
@@ -313,13 +313,13 @@
     "list": []
   },
   "time": {
-    "from": "now-30m",
+    "from": "now-5m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
-  "title": "New dashboard",
+  "title": "Aggregation Mode",
   "uid": "a66a5480-6a60-4b87-9d29-4f0f446edafd",
-  "version": 1,
+  "version": 3,
   "weekStart": ""
 }
