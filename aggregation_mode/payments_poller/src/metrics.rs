@@ -1,51 +1,63 @@
-use prometheus::{self, opts, register_gauge};
-use warp::{reject::Rejection, reply::Reply, Filter};
+use actix_web::{web, App, HttpResponse, HttpServer, Responder};
+use prometheus::{self, opts, Encoder, Gauge, Registry, TextEncoder};
+use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub struct PaymentsPollerMetrics {
-    pub last_processed_block: prometheus::Gauge,
+    pub registry: Registry,
+    pub last_processed_block: Gauge,
 }
 
 impl PaymentsPollerMetrics {
     pub fn start(metrics_port: u16) -> Result<Self, prometheus::Error> {
-        let registry = prometheus::Registry::new();
+        let registry = Registry::new();
 
-        let last_processed_block = register_gauge!(opts!(
+        let last_processed_block = Gauge::with_opts(opts!(
             "last_processed_block",
             "Last processed block by poller"
         ))?;
 
         registry.register(Box::new(last_processed_block.clone()))?;
 
-        let metrics_route = warp::path!("metrics")
-            .and(warp::any().map(move || registry.clone()))
-            .and_then(PaymentsPollerMetrics::metrics_handler);
-
-        tokio::task::spawn(async move {
-            warp::serve(metrics_route)
-                .run(([0, 0, 0, 0], metrics_port))
-                .await;
+        // Arc is used because metrics are a shared resource accessed by both the background and metrics HTTP
+        // server and the application code, across multiple Actix worker threads. The server outlives start(),
+        // so the data must be static and safely shared between threads.
+        let metrics = Arc::new(Self {
+            registry,
+            last_processed_block,
         });
 
-        Ok(Self {
-            last_processed_block,
-        })
+        let server_metrics = metrics.clone();
+        tokio::spawn(async move {
+            let _ = HttpServer::new(move || {
+                App::new()
+                    .app_data(web::Data::new(server_metrics.clone()))
+                    .route(
+                        "/metrics",
+                        web::get().to(PaymentsPollerMetrics::metrics_handler),
+                    )
+            })
+            .bind(("0.0.0.0", metrics_port))
+            .expect("failed to bind metrics server")
+            .run()
+            .await;
+        });
+
+        Ok(Arc::try_unwrap(metrics).unwrap_or_else(|arc| (*arc).clone()))
     }
 
-    pub async fn metrics_handler(registry: prometheus::Registry) -> Result<impl Reply, Rejection> {
-        use prometheus::Encoder;
-        let encoder = prometheus::TextEncoder::new();
+    async fn metrics_handler(metrics: web::Data<Arc<PaymentsPollerMetrics>>) -> impl Responder {
+        let encoder = TextEncoder::new();
+        let metric_families = metrics.registry.gather();
 
         let mut buffer = Vec::new();
-        if let Err(e) = encoder.encode(&registry.gather(), &mut buffer) {
-            eprintln!("could not encode prometheus metrics: {e}");
-        };
-        let res = String::from_utf8(buffer.clone())
-            .inspect_err(|e| eprintln!("prometheus metrics could not be parsed correctly: {e}"))
-            .unwrap_or_default();
-        buffer.clear();
+        if let Err(e) = encoder.encode(&metric_families, &mut buffer) {
+            tracing::error!("could not encode prometheus metrics: {e}");
+        }
 
-        Ok(res)
+        HttpResponse::Ok()
+            .insert_header(("Content-Type", encoder.format_type()))
+            .body(buffer)
     }
 
     pub fn register_last_processed_block(&self, value: u64) {

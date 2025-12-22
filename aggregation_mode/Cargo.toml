@@ -17,7 +17,6 @@ db = { path = "./db" }
 sp1-sdk = "5.0.0"
 risc0-zkvm = { version = "3.0.3" }
 prometheus = { version = "0.13.4", features = ["process"] }
-warp = "0.3.7"
 
 [profile.release]
 opt-level = 3

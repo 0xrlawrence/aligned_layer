@@ -1,51 +1,60 @@
-use prometheus::{self, histogram_opts, register_histogram};
-use warp::{reject::Rejection, reply::Reply, Filter};
+use actix_web::{web, App, HttpResponse, HttpServer, Responder};
+use prometheus::{self, histogram_opts, Encoder, Histogram, Registry, TextEncoder};
+use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub struct GatewayMetrics {
-    pub time_elapsed_db_post: prometheus::Histogram,
+    pub registry: Registry,
+    pub time_elapsed_db_post: Histogram,
 }
 
 impl GatewayMetrics {
     pub fn start(metrics_port: u16) -> Result<Self, prometheus::Error> {
-        let registry = prometheus::Registry::new();
+        let registry = Registry::new();
 
-        let time_elapsed_db_post = register_histogram!(histogram_opts!(
+        let time_elapsed_db_post = Histogram::with_opts(histogram_opts!(
             "time_elapsed_db_post",
             "Time elapsed in DB posts"
         ))?;
 
         registry.register(Box::new(time_elapsed_db_post.clone()))?;
 
-        let metrics_route = warp::path!("metrics")
-            .and(warp::any().map(move || registry.clone()))
-            .and_then(GatewayMetrics::metrics_handler);
-
-        tokio::task::spawn(async move {
-            warp::serve(metrics_route)
-                .run(([0, 0, 0, 0], metrics_port))
-                .await;
+        // Arc is used because metrics are a shared resource accessed by both the background and metrics HTTP
+        // server and the application code, across multiple Actix worker threads. The server outlives start(),
+        // so the data must be static and safely shared between threads.
+        let metrics = Arc::new(Self {
+            registry,
+            time_elapsed_db_post,
         });
 
-        Ok(Self {
-            time_elapsed_db_post,
-        })
+        let server_metrics = metrics.clone();
+        tokio::spawn(async move {
+            let _ = HttpServer::new(move || {
+                App::new()
+                    .app_data(web::Data::new(server_metrics.clone()))
+                    .route("/metrics", web::get().to(GatewayMetrics::metrics_handler))
+            })
+            .bind(("0.0.0.0", metrics_port))
+            .expect("failed to bind metrics server")
+            .run()
+            .await;
+        });
+
+        Ok(Arc::try_unwrap(metrics).unwrap_or_else(|arc| (*arc).clone()))
     }
 
-    pub async fn metrics_handler(registry: prometheus::Registry) -> Result<impl Reply, Rejection> {
-        use prometheus::Encoder;
-        let encoder = prometheus::TextEncoder::new();
+    async fn metrics_handler(metrics: web::Data<Arc<GatewayMetrics>>) -> impl Responder {
+        let encoder = TextEncoder::new();
+        let metric_families = metrics.registry.gather();
 
         let mut buffer = Vec::new();
-        if let Err(e) = encoder.encode(&registry.gather(), &mut buffer) {
+        if let Err(e) = encoder.encode(&metric_families, &mut buffer) {
             tracing::error!("could not encode prometheus metrics: {e}");
-        };
-        let res = String::from_utf8(buffer.clone())
-            .inspect_err(|e| eprintln!("prometheus metrics could not be parsed correctly: {e}"))
-            .unwrap_or_default();
-        buffer.clear();
+        }
 
-        Ok(res)
+        HttpResponse::Ok()
+            .insert_header(("Content-Type", encoder.format_type()))
+            .body(buffer)
     }
 
     pub fn register_db_response_time_post(&self, value: f64) {
