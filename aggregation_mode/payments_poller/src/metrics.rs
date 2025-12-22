@@ -7,7 +7,7 @@ pub struct PaymentsPollerMetrics {
 }
 
 impl PaymentsPollerMetrics {
-    pub fn start(metrics_port: u16) -> anyhow::Result<Self> {
+    pub fn start(metrics_port: u16) -> Result<Self, prometheus::Error> {
         let registry = prometheus::Registry::new();
 
         let last_processed_block = register_gauge!(opts!(

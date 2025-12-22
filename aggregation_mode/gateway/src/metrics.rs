@@ -7,7 +7,7 @@ pub struct GatewayMetrics {
 }
 
 impl GatewayMetrics {
-    pub fn start(metrics_port: u16) -> anyhow::Result<Self> {
+    pub fn start(metrics_port: u16) -> Result<Self, prometheus::Error> {
         let registry = prometheus::Registry::new();
 
         let time_elapsed_db_post = register_histogram!(histogram_opts!(
