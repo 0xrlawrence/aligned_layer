@@ -42,9 +42,12 @@ impl GatewayServer {
     pub fn new(db: Db, config: Config) -> Self {
         let network = Network::from_str(&config.network).expect("A valid network in config file");
 
-        tracing::info!("Starting metrics server on port {}", config.metrics_port);
-        let metrics =
-            GatewayMetrics::start(config.metrics_port).expect("Failed to start metrics server");
+        tracing::info!(
+            "Starting metrics server on port {}",
+            config.gateway_metrics_port
+        );
+        let metrics = GatewayMetrics::start(config.gateway_metrics_port)
+            .expect("Failed to start metrics server");
 
         Self {
             db,

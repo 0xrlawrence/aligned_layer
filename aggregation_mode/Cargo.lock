@@ -6894,7 +6894,9 @@ dependencies = [
  "actix-web",
  "aligned-sdk",
  "alloy",
+ "anyhow",
  "hex",
+ "prometheus",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -6902,6 +6904,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber 0.3.22",
+ "warp",
 ]
 
 [[package]]

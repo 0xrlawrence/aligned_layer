@@ -44,3 +44,17 @@ scrape_configs:
       - targets: ["host.docker.internal:8089"]
         labels:
           bot: "gateway-exporter"
+
+  - job_name: "aggregation-mode-gateway"
+    scrape_interval: 1s
+    static_configs:
+      - targets: ["host.docker.internal:9094"]
+        labels:
+          bot: "aggregation-gateway"
+
+  - job_name: "aggregation-mode-payments-poller"
+    scrape_interval: 1s
+    static_configs:
+      - targets: ["host.docker.internal:9095"]
+        labels:
+          bot: "aggregation-poller"
