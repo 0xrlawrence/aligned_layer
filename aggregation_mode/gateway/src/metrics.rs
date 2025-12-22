@@ -38,7 +38,7 @@ impl GatewayMetrics {
 
         let mut buffer = Vec::new();
         if let Err(e) = encoder.encode(&registry.gather(), &mut buffer) {
-            eprintln!("could not encode prometheus metrics: {e}");
+            tracing::error!("could not encode prometheus metrics: {e}");
         };
         let res = String::from_utf8(buffer.clone())
             .inspect_err(|e| eprintln!("prometheus metrics could not be parsed correctly: {e}"))
