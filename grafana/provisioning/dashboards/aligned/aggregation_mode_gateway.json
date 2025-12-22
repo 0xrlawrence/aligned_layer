@@ -106,7 +106,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(\n  rate(api_response_code{statuscode=~\"4..\"}[100m])\n)",
+          "expr": "sum(\n  rate(api_response_code{statuscode=~\"4..\"}[$__range])\n)",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -200,7 +200,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(\n  rate(api_response_code{statuscode=~\"5..\"}[100m])\n)",
+          "expr": "sum(\n  rate(api_response_code{statuscode=~\"5..\"}[$__range])\n)",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -294,7 +294,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(\n  rate(api_response_code{statuscode=~\"2..\"}[100m])\n)",
+          "expr": "sum(\n  rate(api_response_code{statuscode=~\"2..\",endpoint!=\"/metrics\"}[$__range])\n)",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
