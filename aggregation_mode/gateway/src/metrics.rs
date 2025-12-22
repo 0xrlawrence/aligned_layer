@@ -1,29 +1,21 @@
-use prometheus::{self, opts, register_int_counter, IntCounter};
+use prometheus::{self, histogram_opts, register_histogram};
 use warp::{reject::Rejection, reply::Reply, Filter};
 
 #[derive(Clone, Debug)]
 pub struct GatewayMetrics {
-    pub success_response: IntCounter,
-    pub server_error_response: IntCounter,
-    pub user_error_response: IntCounter,
+    pub time_elapsed_db_post: prometheus::Histogram,
 }
 
 impl GatewayMetrics {
     pub fn start(metrics_port: u16) -> anyhow::Result<Self> {
         let registry = prometheus::Registry::new();
 
-        let success_response =
-            register_int_counter!(opts!("success_response_count", "Success Responses"))?;
+        let time_elapsed_db_post = register_histogram!(histogram_opts!(
+            "time_elapsed_db_post",
+            "Time elapsed in DB posts"
+        ))?;
 
-        let server_error_response =
-            register_int_counter!(opts!("server_error_response_count", "Success Responses"))?;
-
-        let user_error_response =
-            register_int_counter!(opts!("user_error_response_count", "Success Responses"))?;
-
-        registry.register(Box::new(success_response.clone()))?;
-        registry.register(Box::new(server_error_response.clone()))?;
-        registry.register(Box::new(user_error_response.clone()))?;
+        registry.register(Box::new(time_elapsed_db_post.clone()))?;
 
         let metrics_route = warp::path!("metrics")
             .and(warp::any().map(move || registry.clone()))
@@ -36,9 +28,7 @@ impl GatewayMetrics {
         });
 
         Ok(Self {
-            success_response,
-            server_error_response,
-            user_error_response,
+            time_elapsed_db_post,
         })
     }
 
@@ -58,15 +48,7 @@ impl GatewayMetrics {
         Ok(res)
     }
 
-    pub fn inc_success_response(&self) {
-        self.success_response.inc();
-    }
-
-    pub fn inc_server_error_response(&self) {
-        self.server_error_response.inc();
-    }
-
-    pub fn inc_user_error_response(&self) {
-        self.user_error_response.inc();
+    pub fn register_db_response_time_post(&self, value: f64) {
+        self.time_elapsed_db_post.observe(value);
     }
 }

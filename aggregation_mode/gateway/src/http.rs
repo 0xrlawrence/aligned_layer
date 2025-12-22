@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     str::FromStr,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
 use actix_multipart::form::MultipartForm;
@@ -240,6 +240,8 @@ impl GatewayServer {
             return HttpResponse::BadRequest().json(AppResponse::new_unsucessfull(message, 400));
         };
 
+        let start = Instant::now();
+
         match state
             .db
             .insert_task(
@@ -252,9 +254,16 @@ impl GatewayServer {
             )
             .await
         {
-            Ok(task_id) => HttpResponse::Ok().json(AppResponse::new_sucessfull(
-                serde_json::json!({ "task_id": task_id.to_string() }),
-            )),
+            Ok(task_id) => {
+                let duration = start.elapsed();
+                state
+                    .metrics
+                    .register_db_response_time_post(duration.as_secs_f64());
+
+                HttpResponse::Ok().json(AppResponse::new_sucessfull(
+                    serde_json::json!({ "task_id": task_id.to_string() }),
+                ))
+            }
             Err(_) => HttpResponse::InternalServerError()
                 .json(AppResponse::new_unsucessfull("Internal server error", 500)),
         }
