@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     str::FromStr,
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
@@ -62,11 +61,8 @@ impl GatewayServer {
         let port = self.config.port;
         let state = self.clone();
 
-        let mut labels = HashMap::new();
-        labels.insert("label1".to_string(), "value1".to_string());
         let prometheus = PrometheusMetricsBuilder::new("api")
             .endpoint("/metrics")
-            .const_labels(labels)
             .build()
             .unwrap();
 
