@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{str::FromStr, sync::Arc};
 
 use crate::{
     config::Config,
@@ -22,7 +22,7 @@ pub struct PaymentsPoller {
     proof_aggregation_service: AggregationModePaymentServiceContract,
     rpc_provider: RpcProvider,
     config: Config,
-    metrics: PaymentsPollerMetrics,
+    metrics: Arc<PaymentsPollerMetrics>,
 }
 
 impl PaymentsPoller {

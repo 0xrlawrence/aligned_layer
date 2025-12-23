@@ -1,5 +1,6 @@
 use std::{
     str::FromStr,
+    sync::Arc,
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -34,7 +35,7 @@ pub struct GatewayServer {
     db: Db,
     config: Config,
     network: Network,
-    metrics: GatewayMetrics,
+    metrics: Arc<GatewayMetrics>,
 }
 
 impl GatewayServer {

@@ -9,7 +9,7 @@ pub struct PaymentsPollerMetrics {
 }
 
 impl PaymentsPollerMetrics {
-    pub fn start(metrics_port: u16) -> Result<Self, prometheus::Error> {
+    pub fn start(metrics_port: u16) -> Result<Arc<Self>, prometheus::Error> {
         let registry = Registry::new();
 
         let last_processed_block = Gauge::with_opts(opts!(
@@ -43,7 +43,7 @@ impl PaymentsPollerMetrics {
             .await;
         });
 
-        Ok(Arc::try_unwrap(metrics).unwrap_or_else(|arc| (*arc).clone()))
+        Ok(metrics)
     }
 
     async fn metrics_handler(metrics: web::Data<Arc<PaymentsPollerMetrics>>) -> impl Responder {

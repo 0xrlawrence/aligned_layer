@@ -9,7 +9,7 @@ pub struct GatewayMetrics {
 }
 
 impl GatewayMetrics {
-    pub fn start(metrics_port: u16) -> Result<Self, prometheus::Error> {
+    pub fn start(metrics_port: u16) -> Result<Arc<Self>, prometheus::Error> {
         let registry = Registry::new();
 
         let time_elapsed_db_post = Histogram::with_opts(histogram_opts!(
@@ -40,7 +40,7 @@ impl GatewayMetrics {
             .await;
         });
 
-        Ok(Arc::try_unwrap(metrics).unwrap_or_else(|arc| (*arc).clone()))
+        Ok(metrics)
     }
 
     async fn metrics_handler(metrics: web::Data<Arc<GatewayMetrics>>) -> impl Responder {
