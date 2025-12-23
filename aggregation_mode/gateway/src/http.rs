@@ -260,7 +260,7 @@ impl GatewayServer {
                 let duration = start.elapsed();
                 state
                     .metrics
-                    .register_db_response_time_post(duration.as_secs_f64());
+                    .register_db_response_time_post("sp1-post", duration.as_secs_f64());
 
                 HttpResponse::Ok().json(AppResponse::new_sucessfull(
                     serde_json::json!({ "task_id": task_id.to_string() }),

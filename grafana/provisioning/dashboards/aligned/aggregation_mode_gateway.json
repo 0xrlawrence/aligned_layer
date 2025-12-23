@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 2,
+  "id": 8,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -388,7 +388,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by (le) (rate(time_elapsed_db_post_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(time_elapsed_db_query_bucket{query=\"sp1-post\"}[$__rate_interval])))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -576,7 +576,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(time_elapsed_db_post_count[$__rate_interval]))",
+          "expr": "sum(rate(time_elapsed_db_query_count[$__rate_interval]))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -602,6 +602,6 @@
   "timezone": "",
   "title": "Aggregation Mode",
   "uid": "a66a5480-6a60-4b87-9d29-4f0f446edafd",
-  "version": 12,
+  "version": 1,
   "weekStart": ""
 }
