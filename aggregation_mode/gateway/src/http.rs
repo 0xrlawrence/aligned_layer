@@ -61,6 +61,8 @@ impl GatewayServer {
         let port = self.config.port;
         let state = self.clone();
 
+        // Note: This creates a new Prometheus server different from the one created in GatewayServer::new. The created
+        // server exposes metrics related to the actix HTTP server, like response codes and response times
         let prometheus = PrometheusMetricsBuilder::new("api")
             .endpoint("/metrics")
             .build()
