@@ -200,7 +200,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(\n  rate(api_response_code{statuscode=~\"5..\"}[100m])\n)",
+          "expr": "sum(\n  rate(api_response_code{statuscode=~\"5..\"}[$__rate_interval])\n)",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
