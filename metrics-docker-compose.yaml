@@ -2,8 +2,8 @@ version: "3"
 
 networks:
   aligned-network:
+    external: true
     name: aligned-network
-    driver: bridge
 
 services:
   grafana:
