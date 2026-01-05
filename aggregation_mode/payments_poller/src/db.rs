@@ -43,4 +43,21 @@ impl Db {
         .await
         .map(|_| ())
     }
+
+    pub async fn count_total_active_subscriptions(
+        &self,
+        epoch: BigDecimal,
+    ) -> Result<i64, sqlx::Error> {
+        let (count,) = sqlx::query_as::<_, (i64,)>(
+            "
+            SELECT COUNT(*)
+            FROM payment_events
+            WHERE started_at < $1 AND $1 < valid_until",
+        )
+        .bind(epoch)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(count)
+    }
 }

@@ -6,6 +6,7 @@ use std::sync::Arc;
 pub struct PaymentsPollerMetrics {
     pub registry: Registry,
     pub last_processed_block: Gauge,
+    pub active_subscriptions: Gauge,
 }
 
 impl PaymentsPollerMetrics {
@@ -17,7 +18,13 @@ impl PaymentsPollerMetrics {
             "Last processed block by poller"
         ))?;
 
+        let active_subscriptions = Gauge::with_opts(opts!(
+            "active_subscriptions",
+            "Active payment subscriptions by poller"
+        ))?;
+
         registry.register(Box::new(last_processed_block.clone()))?;
+        registry.register(Box::new(active_subscriptions.clone()))?;
 
         // Arc is used because metrics are a shared resource accessed by both the background and metrics HTTP
         // server and the application code, across multiple Actix worker threads. The server outlives start(),
@@ -25,6 +32,7 @@ impl PaymentsPollerMetrics {
         let metrics = Arc::new(Self {
             registry,
             last_processed_block,
+            active_subscriptions,
         });
 
         let server_metrics = metrics.clone();
@@ -62,5 +70,9 @@ impl PaymentsPollerMetrics {
 
     pub fn register_last_processed_block(&self, value: u64) {
         self.last_processed_block.set(value as f64);
+    }
+
+    pub fn register_active_subscriptions(&self, value: i64) {
+        self.active_subscriptions.set(value as f64);
     }
 }
