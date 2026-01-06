@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 8,
+  "id": 7,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -106,7 +106,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(\n  rate(api_response_code{statuscode=~\"4..\"}[5m])\n)",
+          "expr": "floor(\n  increase(api_response_code{job=\"gateway-api\",statuscode=~\"4..\"}[10y])\n)",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -200,7 +200,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(\n  rate(api_response_code{statuscode=~\"5..\"}[$__rate_interval])\n)",
+          "expr": "floor(\n  increase(api_response_code{job=\"gateway-api\",statuscode=~\"5..\"}[10y])\n)",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -294,7 +294,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(\n  rate(api_response_code{statuscode=~\"2..\",endpoint!=\"/metrics\"}[$__range])\n)",
+          "expr": "floor(\n  increase(api_response_code{job=\"gateway-api\",statuscode=~\"2..\",endpoint!=\"/metrics\"}[10y])\n)",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -388,7 +388,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by (le) (rate(time_elapsed_db_query_bucket{query=\"sp1-post\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(time_elapsed_db_query_bucket{query=\"sp1-post\"}[10y])))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -576,7 +576,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(time_elapsed_db_query_count[$__rate_interval]))",
+          "expr": "sum(rate(time_elapsed_db_query_count[10y]))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
