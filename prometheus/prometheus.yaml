@@ -38,23 +38,23 @@ scrape_configs:
         labels:
           bot: "node-exporter"
 
-  - job_name: "gateway-api"
+  - job_name: "gateway-http"
     scrape_interval: 60s
     static_configs:
       - targets: ["host.docker.internal:8089"]
         labels:
-          bot: "gateway-exporter"
+          bot: "gateway-http"
 
-  - job_name: "aggregation-mode-gateway"
+  - job_name: "gateway"
     scrape_interval: 1s
     static_configs:
       - targets: ["host.docker.internal:9094"]
         labels:
-          bot: "aggregation-gateway"
+          bot: "gateway"
 
-  - job_name: "aggregation-mode-payments-poller"
+  - job_name: "poller"
     scrape_interval: 1s
     static_configs:
       - targets: ["host.docker.internal:9095"]
         labels:
-          bot: "aggregation-poller"
+          bot: "poller"
