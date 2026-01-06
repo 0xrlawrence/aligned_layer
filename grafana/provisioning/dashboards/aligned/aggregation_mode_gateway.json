@@ -1862,7 +1862,6 @@
                 "mode": "thresholds"
               },
               "mappings": [],
-              "noValue": "2",
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
@@ -1919,7 +1918,7 @@
               "url_options": {
                 "body_content_type": "application/json",
                 "body_type": "raw",
-                "data": "{\n    \"jsonrpc\": \"2.0\",\n    \"method\": \"eth_call\",\n    \"params\": [\n      {\n        \"to\": \"0xd84c0fEfEaEf69A51836DBf607E031a9033a4ed7\",\n        \"data\": \"0x18160ddd\"\n      },\n      \"latest\"\n    ],\n    \"id\": 1\n  }",
+                "data": "{\n    \"jsonrpc\": \"2.0\",\n    \"method\": \"eth_call\",\n    \"params\": [\n      {\n        \"to\": \"0xcbEAF3BDe82155F56486Fb5a1072cb8baAf547cc\",\n        \"data\": \"0x972e58ba\"\n      },\n      \"latest\"\n    ],\n    \"id\": 1\n  }",
                 "method": "POST"
               }
             }
@@ -2140,7 +2139,6 @@
                 "mode": "thresholds"
               },
               "mappings": [],
-              "noValue": "1",
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
@@ -2197,7 +2195,7 @@
               "url_options": {
                 "body_content_type": "application/json",
                 "body_type": "raw",
-                "data": "{\n    \"jsonrpc\": \"2.0\",\n    \"method\": \"eth_call\",\n    \"params\": [\n      {\n        \"to\": \"0xd84c0fEfEaEf69A51836DBf607E031a9033a4ed7\",\n        \"data\": \"0x18160ddd\"\n      },\n      \"latest\"\n    ],\n    \"id\": 1\n  }",
+                "data": "{\n    \"jsonrpc\": \"2.0\",\n    \"method\": \"eth_call\",\n    \"params\": [\n      {\n        \"to\": \"0xcbEAF3BDe82155F56486Fb5a1072cb8baAf547cc\",\n        \"data\": \"0x6eecb4c9\"\n      },\n      \"latest\"\n    ],\n    \"id\": 1\n  }",
                 "method": "POST"
               }
             }
