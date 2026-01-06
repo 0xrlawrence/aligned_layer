@@ -2033,17 +2033,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "backon"
-version = "1.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cffb0e931875b666fc4fcb20fee52e9bbd1ef836fd9e9e04ec21555f9f85f7ef"
-dependencies = [
- "fastrand 2.3.0",
- "gloo-timers 0.3.0",
- "tokio",
-]
-
-[[package]]
 name = "backtrace"
 version = "0.3.76"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3277,8 +3266,10 @@ checksum = "2a2330da5de22e8a3cb63252ce2abb30116bf5265e89c0e01bc17015ce30a476"
 name = "db"
 version = "0.1.0"
 dependencies = [
+ "serde",
  "sqlx",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -4487,7 +4478,7 @@ version = "3.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f288b0a4f20f9a56b5d1da57e2227c661b7b16168e2f72365f57b63326e29b24"
 dependencies = [
- "gloo-timers 0.2.6",
+ "gloo-timers",
  "send_wrapper 0.4.0",
 ]
 
@@ -4535,6 +4526,7 @@ dependencies = [
  "aligned-sdk",
  "alloy",
  "bincode",
+ "db",
  "hex",
  "prometheus",
  "serde",
@@ -4668,18 +4660,6 @@ name = "gloo-timers"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b995a66bb87bebce9a0f4a95aed01daca4872c050bfcb21653361c03bc35e5c"
-dependencies = [
- "futures-channel",
- "futures-core",
- "js-sys",
- "wasm-bindgen",
-]
-
-[[package]]
-name = "gloo-timers"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbb143cf96099802033e0d4f4963b19fd2e0b728bcf076cd9cf7f6634f092994"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -6850,6 +6830,7 @@ dependencies = [
  "actix-web",
  "aligned-sdk",
  "alloy",
+ "db",
  "hex",
  "prometheus",
  "serde",
@@ -7247,7 +7228,6 @@ version = "0.1.0"
 dependencies = [
  "aligned-sdk",
  "alloy",
- "backon",
  "bincode",
  "c-kzg",
  "ciborium",
