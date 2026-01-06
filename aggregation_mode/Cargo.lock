@@ -3251,8 +3251,10 @@ checksum = "2a2330da5de22e8a3cb63252ce2abb30116bf5265e89c0e01bc17015ce30a476"
 name = "db"
 version = "0.1.0"
 dependencies = [
+ "serde",
  "sqlx",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -4484,6 +4486,7 @@ dependencies = [
  "aligned-sdk",
  "alloy",
  "bincode",
+ "db",
  "hex",
  "serde",
  "serde_json",
@@ -6777,6 +6780,7 @@ dependencies = [
  "actix-web",
  "aligned-sdk",
  "alloy",
+ "db",
  "hex",
  "serde",
  "serde_json",
