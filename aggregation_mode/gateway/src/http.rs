@@ -248,7 +248,7 @@ impl GatewayServer {
             return HttpResponse::BadRequest().json(AppResponse::new_unsucessfull(message, 400));
         };
 
-        let start = Instant::now();
+        let query_started_at = Instant::now();
 
         match state
             .db
@@ -263,10 +263,10 @@ impl GatewayServer {
             .await
         {
             Ok(task_id) => {
-                let duration = start.elapsed();
+                let time_elapsed_db_call = query_started_at.elapsed();
                 state
                     .metrics
-                    .register_db_response_time_post("sp1-post", duration.as_secs_f64());
+                    .register_db_response_time_post("sp1-post", time_elapsed_db_call.as_secs_f64());
 
                 HttpResponse::Ok().json(AppResponse::new_sucessfull(
                     serde_json::json!({ "task_id": task_id.to_string() }),
