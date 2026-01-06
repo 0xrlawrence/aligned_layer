@@ -106,7 +106,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "floor(\n  increase(api_response_code{job=\"gateway-api\",statuscode=~\"4..\"}[10y])\n)",
+          "expr": "floor(\n  increase(api_response_code{job=\"gateway-http\",statuscode=~\"4..\"}[10y])\n)",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -200,7 +200,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "floor(\n  increase(api_response_code{job=\"gateway-api\",statuscode=~\"5..\"}[10y])\n)",
+          "expr": "floor(\n  increase(api_response_code{job=\"gateway-http\",statuscode=~\"5..\"}[10y])\n)",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -294,7 +294,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "floor(\n  increase(api_response_code{job=\"gateway-api\",statuscode=~\"2..\",endpoint!=\"/metrics\"}[10y])\n)",
+          "expr": "floor(\n  increase(api_response_code{job=\"gateway-http\",statuscode=~\"2..\",endpoint!=\"/metrics\"}[10y])\n)",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
