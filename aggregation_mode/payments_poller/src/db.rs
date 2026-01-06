@@ -85,16 +85,18 @@ impl Db {
         &self,
         epoch: BigDecimal,
     ) -> Result<i64, sqlx::Error> {
-        let (count,) = sqlx::query_as::<_, (i64,)>(
-            "
+        self.orchestrator
+            .query(async |pool| {
+                sqlx::query_scalar::<_, i64>(
+                    "
             SELECT COUNT(*)
             FROM payment_events
             WHERE started_at < $1 AND $1 < valid_until",
-        )
-        .bind(epoch)
-        .fetch_one(&self.pool)
-        .await?;
-
-        Ok(count)
+                )
+                .bind(&epoch)
+                .fetch_one(&pool)
+                .await
+            })
+            .await
     }
 }
