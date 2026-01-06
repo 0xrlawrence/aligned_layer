@@ -74,6 +74,7 @@ impl GatewayServer {
             App::new()
                 .app_data(Data::new(state.clone()))
                 .wrap(prometheus.clone())
+                .route("/", web::get().to(Self::get_root))
                 .route("/nonce/{address}", web::get().to(Self::get_nonce))
                 .route("/receipts", web::get().to(Self::get_receipts))
                 .route("/proof/sp1", web::post().to(Self::post_proof_sp1))
@@ -85,6 +86,11 @@ impl GatewayServer {
         .run()
         .await
         .expect("Server to never end");
+    }
+
+    // Returns an OK response (code 200), no matters what receives in the request
+    async fn get_root(_req: HttpRequest) -> impl Responder {
+        HttpResponse::Ok().json(AppResponse::new_sucessfull(serde_json::json!({})))
     }
 
     // Returns the nonce (number of submitted tasks) for a given address
