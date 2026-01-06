@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 6,
+  "id": 2,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -78,8 +78,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -172,8 +171,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -266,8 +264,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -360,8 +357,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -454,8 +450,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -548,8 +543,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -632,8 +626,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -717,8 +710,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -783,8 +775,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -912,13 +903,7 @@
           "pluginVersion": "10.1.10",
           "targets": [
             {
-              "columns": [
-                {
-                  "selector": "$.number",
-                  "text": "block_number",
-                  "type": "string"
-                }
-              ],
+              "columns": [],
               "datasource": {
                 "type": "yesoreyeram-infinity-datasource",
                 "uid": "ethereum_rpc"
@@ -933,13 +918,13 @@
               "refId": "A",
               "root_selector": "$.result",
               "source": "url",
-              "type": "uql",
+              "type": "json",
               "uql": "parse-json\n| scope \"result\"\n| project \"block_number\"=\"number\"",
               "url": "",
               "url_options": {
                 "body_content_type": "application/json",
                 "body_type": "raw",
-                "data": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"eth_getBlockByNumber\",\n  \"params\": [\"latest\", false],\n  \"id\": 1\n}",
+                "data": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"eth_blockNumber\",\n  \"params\": [],\n  \"id\": 1\n}",
                 "headers": [
                   {
                     "key": "Content-Type",
@@ -958,7 +943,7 @@
                 "conversions": [
                   {
                     "destinationType": "number",
-                    "targetField": "result"
+                    "targetField": "value"
                   }
                 ],
                 "fields": {}
@@ -974,6 +959,9 @@
           },
           "fieldConfig": {
             "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
               "mappings": [],
               "thresholds": {
                 "mode": "absolute",
@@ -1005,7 +993,7 @@
             "orientation": "auto",
             "reduceOptions": {
               "calcs": [
-                "last"
+                "lastNotNull"
               ],
               "fields": "/.*/",
               "values": false
@@ -1015,12 +1003,7 @@
           "pluginVersion": "10.1.10",
           "targets": [
             {
-              "columns": [
-                {
-                  "selector": "$.result",
-                  "text": "gas_price_wei_hex"
-                }
-              ],
+              "columns": [],
               "datasource": {
                 "type": "yesoreyeram-infinity-datasource",
                 "uid": "ethereum_rpc"
@@ -1028,12 +1011,15 @@
               "filters": [],
               "format": "table",
               "global_query_id": "",
+              "json_options": {
+                "root_is_not_array": true
+              },
               "method": "POST",
               "refId": "A",
-              "root_selector": "$",
+              "root_selector": "$.result",
               "source": "url",
-              "type": "uql",
-              "uql": "parse-json\n| project \"gas_price_wei_hex\"=\"result\"",
+              "type": "json",
+              "uql": "",
               "url": "",
               "url_options": {
                 "body_content_type": "application/json",
@@ -1052,25 +1038,12 @@
           "title": "Current Gas Price (wei)",
           "transformations": [
             {
-              "id": "calculateField",
-              "options": {
-                "mode": "reduceRow",
-                "reduce": {
-                  "include": [
-                    "result"
-                  ],
-                  "reducer": "lastNotNull"
-                },
-                "replaceFields": true
-              }
-            },
-            {
               "id": "convertFieldType",
               "options": {
                 "conversions": [
                   {
                     "destinationType": "number",
-                    "targetField": "result"
+                    "targetField": "value"
                   }
                 ],
                 "fields": {}
@@ -2653,6 +2626,6 @@
   "timezone": "",
   "title": "Aggregation Mode",
   "uid": "a66a5480-6a60-4b87-9d29-4f0f446edafd",
-  "version": 10,
+  "version": 1,
   "weekStart": ""
 }
