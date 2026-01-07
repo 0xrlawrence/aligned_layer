@@ -36,7 +36,6 @@ fn main() {
             ],
             // We use Docker to generate a reproducible ELF that will be identical across all platforms
             // (https://docs.succinct.xyz/docs/sp1/writing-programs/compiling#production-builds)
-            docker: true,
             ..Default::default()
         }
     });
@@ -45,13 +44,90 @@ fn main() {
     // regardless of the machine or local environment, will produce the same ImageID
     let docker_options = DockerOptionsBuilder::default().build().unwrap();
     // Reference: https://github.com/risc0/risc0/blob/main/risc0/build/src/config.rs#L73-L90
-    let guest_options = GuestOptionsBuilder::default()
-        .use_docker(docker_options)
-        .build()
-        .unwrap();
+    let guest_options = GuestOptionsBuilder::default().build().unwrap();
 
     risc0_build::embed_methods_with_options(HashMap::from([(
         "risc0_aggregation_program",
         guest_options,
     )]));
+
+    // Steps followed from https://0xpolygonhermez.github.io/zisk/getting_started/writing_programs.html#build
+
+    // build.rs runs a subprocess without the shell's rustup selection; set the toolchain
+    // explicitly so cargo-zisk uses Zisk's rustc instead of the host toolchain.
+    let zisk_rustc_path = rustc_path_for("zisk");
+
+    let mut build_command = std::process::Command::new("cargo-zisk");
+    let mut user_proof_aggregator_rom_setup_command = std::process::Command::new("cargo-zisk");
+    let mut chunk_aggregator_rom_setup_command = std::process::Command::new("cargo-zisk");
+
+    build_command
+        .env("RUSTC", &zisk_rustc_path)
+        .args(["build", "--release"])
+        .current_dir("aggregation_programs/zisk/");
+
+    let build_status = build_command
+        .status()
+        .expect("Failed to execute zisk build command");
+
+    if !build_status.success() {
+        panic!("Failed to build zisk elfs");
+    }
+
+    let user_proof_aggregator_rom_setup_status = user_proof_aggregator_rom_setup_command
+        .args([
+            "rom-setup",
+            "--elf",
+            "./target/riscv64ima-zisk-zkvm-elf/release/zisk_user_proofs_aggregator_program",
+        ])
+        .env("RUSTC", &zisk_rustc_path)
+        .current_dir("./aggregation_programs/")
+        .status()
+        .unwrap();
+
+    if !user_proof_aggregator_rom_setup_status.success() {
+        panic!("Failed to execute rom-setup command on user proof aggregator program");
+    }
+
+    let chunk_aggregator_rom_setup_status = chunk_aggregator_rom_setup_command
+        .args([
+            "rom-setup",
+            "--elf",
+            "./target/riscv64ima-zisk-zkvm-elf/release/zisk_chunk_aggregator_program",
+        ])
+        .env("RUSTC", &zisk_rustc_path)
+        .current_dir("./aggregation_programs/")
+        .status()
+        .unwrap();
+
+    if !chunk_aggregator_rom_setup_status.success() {
+        panic!("Failed to execute rom-setup command on chunk aggregator program");
+    }
+
+    let _ = std::fs::create_dir("./aggregation_programs/zisk/elf");
+
+    std::fs::copy(
+        "./aggregation_programs/target/riscv64ima-zisk-zkvm-elf/release/zisk_user_proofs_aggregator_program",
+        "./aggregation_programs/zisk/elf/zisk_user_proofs_aggregator_program",
+    )
+    .expect("Could not zisk_user_proofs_aggregator_program elf to aggregation_programs/zisk/elf directory");
+
+    std::fs::copy(
+        "./aggregation_programs/target/riscv64ima-zisk-zkvm-elf/release/zisk_chunk_aggregator_program",
+        "./aggregation_programs/zisk/elf/zisk_chunk_aggregator_program",
+    )
+    .expect("Could not zisk_chunk_aggregator_program elf to aggregation_programs/zisk/elf directory");
+}
+
+fn rustc_path_for(toolchain: &str) -> std::path::PathBuf {
+    let output = std::process::Command::new("rustup")
+        .args(["which", "rustc", "--toolchain", toolchain])
+        .output()
+        .expect("failed to execute rustup");
+
+    if !output.status.success() {
+        panic!("rustup which rustc failed for toolchain {toolchain}");
+    }
+
+    std::path::PathBuf::from(String::from_utf8_lossy(&output.stdout).trim())
 }
