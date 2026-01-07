@@ -330,7 +330,7 @@
         {
           "datasource": {
             "type": "yesoreyeram-infinity-datasource",
-            "uid": "rpc"
+            "uid": "http"
           },
           "fieldConfig": {
             "defaults": {
@@ -397,7 +397,7 @@
               "columns": [],
               "datasource": {
                 "type": "yesoreyeram-infinity-datasource",
-                "uid": "rpc"
+                "uid": "http"
               },
               "filters": [],
               "format": "table",
