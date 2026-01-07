@@ -9,7 +9,6 @@ serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 agg_mode_sdk = { workspace = true }
 prometheus = { workspace = true }
-aligned-sdk = { workspace = true }
 sp1-sdk = { workspace = true }
 db = { workspace = true }
 tracing = { version = "0.1", features = ["log"] }
