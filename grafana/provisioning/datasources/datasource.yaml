@@ -42,3 +42,14 @@ datasources:
     readOnly: false
     editable: true
     basicAuth: false
+
+  # Note: We use this data source for health check calls. The one above is not useful for non-Ethereum calls
+  # because the RPC URL is prepended to the one indicated in the panel.
+  - name: "RPC"
+    type: "yesoreyeram-infinity-datasource"
+    uid: "rpc"
+    access: "proxy"
+    url: ""
+    isDefault: false
+    jsonData:
+      global_queries: []
