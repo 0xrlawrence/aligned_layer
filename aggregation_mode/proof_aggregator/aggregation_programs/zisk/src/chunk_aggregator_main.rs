@@ -5,7 +5,10 @@ use lambdaworks_crypto::merkle_tree::merkle::MerkleTree;
 use zisk_aggregation_program::{ChunkAggregatorInput, Hash32};
 
 // Generated with `make proof_aggregator_write_program_ids` and copied from program_ids.json
-pub const USER_PROOFS_AGGREGATOR_PROGRAM_VK_HASH: [u8; 32] = [0u8; 32];
+pub const USER_PROOFS_AGGREGATOR_PROGRAM_VK_HASH: [u8; 32] = [
+    86, 146, 102, 198, 206, 75, 142, 66, 123, 251, 236, 150, 2, 205, 75, 142, 237, 255, 93, 54, 2,
+    16, 190, 188, 246, 3, 188, 241, 235, 64, 220, 228,
+];
 
 pub fn main() {
     let input = ziskos::read_input_slice();
@@ -21,11 +24,29 @@ pub fn main() {
         // same public inputs could bypass verification.
         assert!(proof.vk.clone() == USER_PROOFS_AGGREGATOR_PROGRAM_VK_HASH);
 
-        let merkle_root: [u8; 32] = proof
-            .proof
-            .clone()
+        let proof_words = bytemuck::cast_slice::<u8, u64>(&proof.proof);
+
+        // Reading public inputs as done in the verify of the lib at https://github.com/0xPolygonHermez/zisk/blob/maint/checkouts/pil2-proofman-3d49384e4e2f0af7/78497c5/verifier/src/verifier.rs#L66-L73
+        let mut p = 0;
+        let n_public_inputs = proof_words[p];
+        p += 1;
+
+        // we should end up with a vector of length 4 as the public input is a 256 bits digest
+        let mut publics = Vec::new();
+        for _ in 0..n_public_inputs {
+            publics.push(proof_words[p]);
+            p += 1;
+        }
+
+        let merkle_root_words: [u64; 4] = publics
             .try_into()
             .expect("Public input to be the hash of the chunk tree");
+
+        let mut merkle_root = [0u8; 32];
+        for (idx, word) in merkle_root_words.iter().enumerate() {
+            let start = idx * 8;
+            merkle_root[start..start + 8].copy_from_slice(&word.to_le_bytes());
+        }
 
         // Reconstruct the merkle tree and verify that the roots match
         let leaves_commitment: Vec<Hash32> = leaves_commitment.into_iter().map(Hash32).collect();
