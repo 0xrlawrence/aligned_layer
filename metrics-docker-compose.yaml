@@ -27,6 +27,7 @@ services:
       - POSTGRES_DB=postgres
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
+      - PROMETHEUS_URL=http://prometheus:9090
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
