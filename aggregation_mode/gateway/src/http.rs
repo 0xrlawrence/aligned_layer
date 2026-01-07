@@ -10,7 +10,7 @@ use actix_web::{
     App, HttpRequest, HttpResponse, HttpServer, Responder,
 };
 use actix_web_prometheus::PrometheusMetricsBuilder;
-use agg_mode_sdk::types::Network;
+use agg_mode_sdk::types::types::Network;
 use aligned_sdk::aggregation_layer::AggregationModeProvingSystem;
 use alloy::signers::Signature;
 use sp1_sdk::{SP1ProofWithPublicValues, SP1VerifyingKey};
