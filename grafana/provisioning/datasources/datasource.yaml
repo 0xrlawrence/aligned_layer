@@ -53,3 +53,20 @@ datasources:
     isDefault: false
     jsonData:
       global_queries: []
+
+  - name: pg_auto_failover Monitor (host port)
+    type: postgres
+    uid: pgaf_monitor_host
+    access: proxy
+    orgId: 1
+    url: host.docker.internal:5436
+    database: pg_auto_failover
+    user: autoctl_node
+    basicAuth: false
+    isDefault: false
+    editable: true
+    jsonData:
+      sslmode: require
+      postgresVersion: 1700
+    secureJsonData:
+      password: ""
