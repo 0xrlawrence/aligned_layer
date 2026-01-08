@@ -107,7 +107,7 @@ show_aligned_error_codes: ## Show AlignedLayer error codes
 
 __CONTRACTS_DEPLOYMENT_ANVIL__: ## ____
 
-anvil_deploy_all_contracts: anvil_deploy_eigen_contracts anvil_deploy_risc0_contracts anvil_deploy_sp1_contracts anvil_deploy_aligned_contracts
+anvil_deploy_all_contracts: anvil_deploy_eigen_contracts anvil_deploy_risc0_contracts anvil_deploy_sp1_contracts anvil_deploy_zisk_contracts anvil_deploy_aligned_contracts
 
 anvil_deploy_eigen_contracts: ## Deploy EigenLayer Contracts on ANVIL
 	@echo "Deploying Eigen Contracts..."
@@ -120,6 +120,10 @@ anvil_deploy_risc0_contracts: ## Deploy RISC0 Contracts used by Aggregation Mode
 anvil_deploy_sp1_contracts: ## Deploy SP1 Contracts used by Aggregation Mode on ANVIL
 	@echo "Deploying SP1 Contracts..."
 	. contracts/scripts/anvil/deploy_sp1_contracts.sh
+
+anvil_deploy_zisk_contracts: ## Deploy Zisk Contracts used by Aggregation Mode on ANVIL
+	@echo "Deploying Zisk Contracts..."
+	. contracts/scripts/anvil/deploy_zisk_contracts.sh
 
 anvil_deploy_aligned_contracts: ## Deploy Aligned Contracts (Verification Layer and Aggregation Mode) on ANVIL
 	@echo "Deploying Aligned Contracts..."
