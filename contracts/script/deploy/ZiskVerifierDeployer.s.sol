@@ -21,6 +21,7 @@ contract ZiskVerifierDeployer is Script {
             verifier = new ZiskVerifier();
         }
 
+        console2.log("ZiskVerifier deployed at:", address(verifier));
         vm.stopBroadcast();
     }
 }
