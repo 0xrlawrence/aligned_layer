@@ -1,4 +1,8 @@
-use std::{str::FromStr, sync::Arc};
+use std::{
+    str::FromStr,
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use crate::{
     config::Config,
@@ -131,7 +135,28 @@ impl PaymentsPoller {
                 continue;
             };
 
+            let now_epoch = match SystemTime::now().duration_since(UNIX_EPOCH) {
+                Ok(duration) => duration.as_secs(),
+                Err(_) => {
+                    continue;
+                }
+            };
+
+            // Note: This implies a call to the database, and may be optimized to reduce the amount of calls
+            let Ok(active_subscriptions_amount) = self
+                .db
+                .count_total_active_subscriptions(
+                    BigDecimal::from_str(&now_epoch.to_string()).unwrap(),
+                )
+                .await
+            else {
+                tracing::error!("Failed to get the active subscriptions amount");
+                continue;
+            };
+
             self.metrics.register_last_processed_block(current_block);
+            self.metrics
+                .register_active_subscriptions(active_subscriptions_amount);
 
             tokio::time::sleep(std::time::Duration::from_secs(
                 seconds_to_wait_between_polls,

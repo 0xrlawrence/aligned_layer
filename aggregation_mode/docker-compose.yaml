@@ -1,6 +1,11 @@
 volumes:
   postgres_data:
 
+networks:
+  aligned-network:
+    name: aligned-network
+    driver: bridge
+
 name: aggregation-mode
 services:
   postgres:
@@ -14,6 +19,9 @@ services:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - 5435:5432
+    networks:
+      - aligned-network
+
   adminer:
     image: adminer
     restart: always
@@ -21,3 +29,5 @@ services:
       - postgres
     ports:
       - 8090:8080
+    networks:
+      - aligned-network

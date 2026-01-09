@@ -80,4 +80,23 @@ impl Db {
             })
             .await
     }
+
+    pub async fn count_total_active_subscriptions(
+        &self,
+        epoch: BigDecimal,
+    ) -> Result<i64, sqlx::Error> {
+        self.orchestrator
+            .query(async |pool| {
+                sqlx::query_scalar::<_, i64>(
+                    "
+            SELECT COUNT(*)
+            FROM payment_events
+            WHERE started_at < $1 AND $1 < valid_until",
+                )
+                .bind(&epoch)
+                .fetch_one(&pool)
+                .await
+            })
+            .await
+    }
 }
