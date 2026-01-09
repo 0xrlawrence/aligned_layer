@@ -63,7 +63,7 @@ pub fn main() {
 
         leaves.extend(leaves_commitment);
 
-        proofman_verifier::verify(&proof.proof, &proof.vk);
+        proofman_verifier::verify(&proof.proof, &input.vk);
     }
 
     // Finally, compute the final merkle root with all the leaves

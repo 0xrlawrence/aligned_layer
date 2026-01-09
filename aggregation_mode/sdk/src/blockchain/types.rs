@@ -52,6 +52,7 @@ pub type RPCProvider = alloy::providers::fillers::FillProvider<
 pub enum AggregationModeProvingSystem {
     SP1 = 1,
     RISC0 = 2,
+    ZISK = 3,
 }
 
 impl AggregationModeProvingSystem {

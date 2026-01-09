@@ -1,7 +1,7 @@
 use crate::{
     aggregators::{
         risc0_aggregator::Risc0ProofReceiptAndImageId, sp1_aggregator::SP1ProofWithPubValuesAndVk,
-        AlignedProof, ZKVMEngine,
+        zisk_aggregator::ZiskStarkProof, AlignedProof, ZKVMEngine,
     },
     backend::db::{Db, DbError},
 };
@@ -73,6 +73,14 @@ impl ProofsFetcher {
                             }
                         }
                     })
+                    .collect();
+
+                pairs.into_iter().unzip()
+            }
+            ZKVMEngine::ZISK => {
+                let pairs: Vec<(AlignedProof, Uuid)> = tasks
+                    .into_par_iter()
+                    .filter_map(|task| Some((ZiskStarkProof::new(task.proof), task.task_id)))
                     .collect();
 
                 pairs.into_iter().unzip()
