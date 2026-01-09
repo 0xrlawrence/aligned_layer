@@ -58,9 +58,14 @@ fn main() {
     let zisk_rustc_path = rustc_path_for("zisk");
 
     let mut build_command = std::process::Command::new("cargo-zisk");
+
     let mut user_proof_aggregator_rom_setup_command = std::process::Command::new("cargo-zisk");
     let mut chunk_aggregator_rom_setup_command = std::process::Command::new("cargo-zisk");
 
+    let mut user_proof_aggregator_rom_vk_command = std::process::Command::new("cargo-zisk");
+    let mut chunk_aggregator_rom_vk_command = std::process::Command::new("cargo-zisk");
+
+    // Zisk build elf command
     build_command
         .env("RUSTC", &zisk_rustc_path)
         .args(["build", "--release"])
@@ -74,6 +79,7 @@ fn main() {
         panic!("Failed to build zisk elfs");
     }
 
+    // Zisk rom-setup commands
     let user_proof_aggregator_rom_setup_status = user_proof_aggregator_rom_setup_command
         .args([
             "rom-setup",
@@ -102,6 +108,41 @@ fn main() {
 
     if !chunk_aggregator_rom_setup_status.success() {
         panic!("Failed to execute rom-setup command on chunk aggregator program");
+    }
+
+    // Zisk rom-vkey commands
+    let user_proofs_aggregator_rom_vkey_status = user_proof_aggregator_rom_vk_command
+        .args([
+            "rom-vkey",
+            "--elf",
+            "./target/riscv64ima-zisk-zkvm-elf/release/zisk_user_proofs_aggregator_program",
+            "-o",
+            "zisk/vk/zisk_user_proofs_aggregator_program",
+        ])
+        .env("RUSTC", &zisk_rustc_path)
+        .current_dir("./aggregation_programs/")
+        .status()
+        .unwrap();
+
+    if !user_proofs_aggregator_rom_vkey_status.success() {
+        panic!("Failed to execute rom-vkey command on user proofs aggregator program");
+    }
+
+    let chunk_aggregator_rom_vkey_status = chunk_aggregator_rom_vk_command
+        .args([
+            "rom-vkey",
+            "--elf",
+            "./target/riscv64ima-zisk-zkvm-elf/release/zisk_chunk_aggregator_program",
+            "-o",
+            "zisk/vk/zisk_chunk_aggregator_program",
+        ])
+        .env("RUSTC", &zisk_rustc_path)
+        .current_dir("./aggregation_programs/")
+        .status()
+        .unwrap();
+
+    if !chunk_aggregator_rom_vkey_status.success() {
+        panic!("Failed to execute rom-vkey command on chunk aggregator program");
     }
 
     let _ = std::fs::create_dir("./aggregation_programs/zisk/elf");

@@ -5,9 +5,11 @@ use lambdaworks_crypto::merkle_tree::merkle::MerkleTree;
 use zisk_aggregation_program::{ChunkAggregatorInput, Hash32};
 
 // Generated with `make proof_aggregator_write_program_ids` and copied from program_ids.json
-pub const USER_PROOFS_AGGREGATOR_PROGRAM_VK_HASH: [u8; 32] = [
-    86, 146, 102, 198, 206, 75, 142, 66, 123, 251, 236, 150, 2, 205, 75, 142, 237, 255, 93, 54, 2,
-    16, 190, 188, 246, 3, 188, 241, 235, 64, 220, 228,
+pub const USER_PROOFS_AGGREGATOR_PROGRAM_ROM_ROOT: [u64; 4] = [
+    9552917093105913802,
+    7845128850459495418,
+    6121665346010988278,
+    15056293071596476132,
 ];
 
 pub fn main() {
@@ -18,12 +20,6 @@ pub fn main() {
 
     // Verify the proofs.
     for (proof, leaves_commitment) in input.proofs_and_leaves_commitment {
-        // Ensure the aggregated chunk originates from the user proofs aggregation program.
-        // This validation step guarantees that the proof was genuinely verified
-        // by this program. Without this check, a different program using the
-        // same public inputs could bypass verification.
-        assert!(proof.vk.clone() == USER_PROOFS_AGGREGATOR_PROGRAM_VK_HASH);
-
         let proof_words = bytemuck::cast_slice::<u8, u64>(&proof.proof);
 
         // Reading public inputs as done in the verify of the lib at https://github.com/0xPolygonHermez/zisk/blob/maint/checkouts/pil2-proofman-3d49384e4e2f0af7/78497c5/verifier/src/verifier.rs#L66-L73
@@ -32,11 +28,23 @@ pub fn main() {
         p += 1;
 
         // we should end up with a vector of length 4 as the public input is a 256 bits digest
+        let mut rom_vkey: [u64; 4] = [0_u64; 4];
         let mut publics = Vec::new();
-        for _ in 0..n_public_inputs {
+        for i in 0..n_public_inputs {
+            // The first 4 entries are the rom vkey
+            if i < 4 {
+                rom_vkey[i as usize] = proof_words[p];
+            }
+
             publics.push(proof_words[p]);
             p += 1;
         }
+
+        // Ensure the aggregated chunk originates from the user proofs aggregation program.
+        // This validation step guarantees that the proof was genuinely verified
+        // by this program. Without this check, a different program using the
+        // same public inputs could bypass verification.
+        assert!(rom_vkey == USER_PROOFS_AGGREGATOR_PROGRAM_ROM_ROOT);
 
         let merkle_root_words: [u64; 4] = publics
             .try_into()

@@ -1,5 +1,6 @@
 pub mod risc0_aggregator;
 pub mod sp1_aggregator;
+pub mod zisk_aggregator;
 
 use std::fmt::Display;
 
