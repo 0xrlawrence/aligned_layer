@@ -236,7 +236,7 @@ __AGGREGATION_MODE__: ## ____
 
 is_aggregator_set:
 	@if [ -z "$(AGGREGATOR)" ]; then \
-		echo "Error: AGGREGATOR is not set. Please provide arg AGGREGATOR='sp1' or 'risc0'."; \
+		echo "Error: AGGREGATOR is not set. Please provide arg AGGREGATOR='sp1' or 'risc0' or 'zisk'."; \
 		exit 1; \
 	fi
 
@@ -893,7 +893,7 @@ aligned_get_user_balance_holesky:
 __GENERATE_PROOFS__: ## ____
 
 generate_zisk_proof:
-	@cd scripts/test_files/zisk && cargo-zisk build --release && \
+	@cd scripts/test_files/zisk/sha_hasher && cargo-zisk build --release && \
 	cargo-zisk rom-setup -e target/riscv64ima-zisk-zkvm-elf/release/sha_hasher && \
 	cargo-zisk prove -e target/riscv64ima-zisk-zkvm-elf/release/sha_hasher -i build/input.bin -o proof -a -y 
 

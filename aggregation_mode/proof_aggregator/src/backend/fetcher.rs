@@ -80,7 +80,10 @@ impl ProofsFetcher {
             ZKVMEngine::ZISK => {
                 let pairs: Vec<(AlignedProof, Uuid)> = tasks
                     .into_par_iter()
-                    .filter_map(|task| Some((ZiskStarkProof::new(task.proof), task.task_id)))
+                    .filter_map(|task| {
+                        let proof = ZiskStarkProof::new(task.proof);
+                        Some((AlignedProof::Zisk(proof.into()), task.task_id))
+                    })
                     .collect();
 
                 pairs.into_iter().unzip()

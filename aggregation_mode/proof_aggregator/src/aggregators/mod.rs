@@ -34,6 +34,7 @@ impl Display for ZKVMEngine {
 pub enum ProofAggregationError {
     SP1Aggregation(SP1AggregationError),
     Risc0Aggregation(Risc0AggregationError),
+    ZiskAggregation(zisk_aggregator::AlignedZiskError),
     PublicInputsDeserialization,
 }
 
@@ -184,12 +185,9 @@ impl ZKVMEngine {
 
                 let mut agg_proofs: Vec<(ZiskStarkProof, Vec<[u8; 32]>)> = vec![];
                 for (i, chunk) in chunks.enumerate() {
-                    let leaves_commitment = chunk
-                        .iter()
-                        .map(|e| e.hash_image_id_and_public_inputs())
-                        .collect();
+                    let leaves_commitment = chunk.iter().map(|e| e.hash_proof()).collect();
                     let agg_proof = zisk_aggregator::run_user_proofs_aggregator(chunk)
-                        .map_err(ProofAggregationError::Risc0Aggregation)?;
+                        .map_err(ProofAggregationError::ZiskAggregation)?;
                     agg_proofs.push((agg_proof, leaves_commitment));
 
                     info!("Chunk number {} has been aggregated", i);
@@ -197,9 +195,9 @@ impl ZKVMEngine {
 
                 info!("All chunks have been aggregated, performing last aggregation...");
                 let agg_proof = zisk_aggregator::run_chunk_aggregator(&agg_proofs)
-                    .map_err(ProofAggregationError::Risc0Aggregation)?;
+                    .map_err(ProofAggregationError::ZiskAggregation)?;
 
-                let public_input_bytes = agg_proof.public_values;
+                let public_input_bytes = agg_proof.public_values.clone();
                 let merkle_root: [u8; 32] = public_input_bytes
                     .try_into()
                     .map_err(|_| ProofAggregationError::PublicInputsDeserialization)?;

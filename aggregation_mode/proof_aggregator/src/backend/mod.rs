@@ -123,7 +123,7 @@ impl ProofAggregator {
             config,
             sp1_chunk_aggregator_vk_hash_bytes,
             risc0_chunk_aggregator_image_id_bytes,
-            zisk_chunk_aggregator_vk_hash_bytes: zisk_chunk_aggregator_vk_bytes,
+            zisk_chunk_aggregator_vk_hash_bytes,
             db,
         }
     }
@@ -371,9 +371,9 @@ impl ProofAggregator {
                 .proof_aggregation_service
                 .verifyAggregationZisk(
                     blob_versioned_hash.into(),
-                    proof.vk.into(),
-                    proof.public_values.into(),
-                    proof.proof.into(),
+                    proof.vk.clone().into(),
+                    proof.public_values.to_vec().into(),
+                    proof.proof.to_vec().into(),
                     self.zisk_chunk_aggregator_vk_hash_bytes.into(),
                 )
                 .sidecar(blob)
