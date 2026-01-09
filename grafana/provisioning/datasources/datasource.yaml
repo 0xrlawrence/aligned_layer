@@ -60,8 +60,8 @@ datasources:
     access: proxy
     orgId: 1
     url: "${MONITOR_DB_HOST}:${MONITOR_DB_PORT}"
-    database: MONITOR_DB_DB
-    user: MONITOR_DB_USER
+    database: "${MONITOR_DB_DB}"
+    user: "${MONITOR_DB_USER}"
     secureJsonData:
       password: ""
     basicAuth: false
