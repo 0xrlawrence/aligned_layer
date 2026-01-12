@@ -34,6 +34,7 @@ pub fn main() {
             // The first 4 entries are the rom vkey
             if i < 4 {
                 rom_vkey[i as usize] = proof_words[p];
+                p += 1;
             }
 
             publics.push(proof_words[p]);
