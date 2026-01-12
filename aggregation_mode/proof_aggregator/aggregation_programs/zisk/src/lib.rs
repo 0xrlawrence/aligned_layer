@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use sha2::Digest;
 use sha3::Keccak256;
 
-const ZISK_PROVING_SYSTEM_ID: u16 = 1;
+const ZISK_PROVING_SYSTEM_ID: u16 = 3;
 
 #[derive(Serialize, Deserialize)]
 pub struct ChunkAggregatorInput {

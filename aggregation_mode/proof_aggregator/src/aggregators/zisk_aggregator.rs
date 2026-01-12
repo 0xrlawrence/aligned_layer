@@ -196,6 +196,14 @@ pub(crate) fn run_chunk_aggregator(
         )));
     }
 
+    // Files needed to generate snark proof
+    let recursivef_path = format!("{ZISK_PROGRAMS_DIR}/recursivef.json");
+    std::fs::File::create(&recursivef_path)?;
+    let snark_output_dir = format!("{ZISK_PROGRAMS_DIR}/{SNARK_OUTPUT_PATH}");
+    std::fs::create_dir_all(&snark_output_dir)?;
+    let snark_output_proofs_dir = format!("{snark_output_dir}/proofs");
+    std::fs::create_dir_all(&snark_output_proofs_dir)?;
+
     // wrap it to snark
     let stark_proof_path = format!("{OUTPUT_PATH}/vadcop_final_proof.bin");
     let home_dir = std::env::var("HOME").expect("HOME environment variable not set");
