@@ -62,8 +62,10 @@ pub async fn run_sp1(args: SubmitSP1Args) {
 pub async fn run_zisk(args: SubmitZiskArgs) {
     tracing::info!("Submitting Zisk proof to {:?} ", args.network);
 
-    let proof = std::fs::read(&args.proof_path)
-        .expect(&format!("failed to read proof from {}", args.proof_path.display()));
+    let proof = std::fs::read(&args.proof_path).expect(&format!(
+        "failed to read proof from {}",
+        args.proof_path.display()
+    ));
 
     let signer =
         LocalSigner::from_str(args.private_key.trim()).expect("failed to parse private key: {e}");

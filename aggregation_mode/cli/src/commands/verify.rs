@@ -78,7 +78,14 @@ pub async fn run_sp1(args: VerifySP1Args) {
 
     let verification_data = AggregationModeVerificationData::SP1 { vk, public_inputs };
 
-    verify_proof(args.network, args.rpc_url, args.beacon_url, args.from_block, verification_data).await;
+    verify_proof(
+        args.network,
+        args.rpc_url,
+        args.beacon_url,
+        args.from_block,
+        verification_data,
+    )
+    .await;
 }
 
 pub async fn run_risc0(args: VerifyRisc0Args) {
@@ -91,9 +98,19 @@ pub async fn run_risc0(args: VerifyRisc0Args) {
 
     let public_inputs = std::fs::read(&args.public_inputs).expect("to read public inputs file");
 
-    let verification_data = AggregationModeVerificationData::Risc0 { image_id, public_inputs };
+    let verification_data = AggregationModeVerificationData::Risc0 {
+        image_id,
+        public_inputs,
+    };
 
-    verify_proof(args.network, args.rpc_url, args.beacon_url, args.from_block, verification_data).await;
+    verify_proof(
+        args.network,
+        args.rpc_url,
+        args.beacon_url,
+        args.from_block,
+        verification_data,
+    )
+    .await;
 }
 
 pub async fn run_zisk(args: VerifyZiskArgs) {
@@ -103,7 +120,14 @@ pub async fn run_zisk(args: VerifyZiskArgs) {
 
     let verification_data = AggregationModeVerificationData::Zisk { proof };
 
-    verify_proof(args.network, args.rpc_url, args.beacon_url, args.from_block, verification_data).await;
+    verify_proof(
+        args.network,
+        args.rpc_url,
+        args.beacon_url,
+        args.from_block,
+        verification_data,
+    )
+    .await;
 }
 
 async fn verify_proof(

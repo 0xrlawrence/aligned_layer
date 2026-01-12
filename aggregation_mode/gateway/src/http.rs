@@ -25,7 +25,9 @@ use crate::{
     db::Db,
     helpers::get_time_left_day_formatted,
     metrics::GatewayMetrics,
-    types::{GetReceiptsResponse, SubmitProofRequestRisc0, SubmitProofRequestSP1, SubmitProofRequestZisk},
+    types::{
+        GetReceiptsResponse, SubmitProofRequestRisc0, SubmitProofRequestSP1, SubmitProofRequestZisk,
+    },
     verifiers::{verify_sp1_proof, verify_zisk_proof, VerificationError},
 };
 
@@ -401,7 +403,7 @@ impl GatewayServer {
                 &recovered_address,
                 AggregationModeProvingSystem::ZISK.as_u16() as i32,
                 &proof_content,
-                &[],  // Zisk proofs don't have a separate vk file
+                &[], // Zisk proofs don't have a separate vk file
                 None,
                 data.nonce.0 as i64,
             )
@@ -409,9 +411,10 @@ impl GatewayServer {
         {
             Ok(task_id) => {
                 let time_elapsed_db_call = query_started_at.elapsed();
-                state
-                    .metrics
-                    .register_db_response_time_post("zisk-post", time_elapsed_db_call.as_secs_f64());
+                state.metrics.register_db_response_time_post(
+                    "zisk-post",
+                    time_elapsed_db_call.as_secs_f64(),
+                );
 
                 HttpResponse::Ok().json(AppResponse::new_sucessfull(
                     serde_json::json!({ "task_id": task_id.to_string() }),
