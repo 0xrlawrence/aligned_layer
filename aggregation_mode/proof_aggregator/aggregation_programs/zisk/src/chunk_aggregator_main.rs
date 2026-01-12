@@ -50,14 +50,10 @@ pub fn main() {
         // same public inputs could bypass verification.
         assert!(rom_vkey == USER_PROOFS_AGGREGATOR_PROGRAM_ROM_ROOT);
 
-        let merkle_root_words: [u64; 4] = publics
-            .try_into()
-            .expect("Public input to be the hash of the chunk tree");
-
         let mut merkle_root = [0u8; 32];
-        for (idx, word) in merkle_root_words.iter().enumerate() {
-            let start = idx * 8;
-            merkle_root[start..start + 8].copy_from_slice(&word.to_le_bytes());
+        for (idx, word) in publics.iter().enumerate() {
+            let start = idx * 4;
+            merkle_root[start..start + 4].copy_from_slice(&( *word as u32).to_le_bytes());
         }
 
         // Reconstruct the merkle tree and verify that the roots match
