@@ -14,15 +14,17 @@ pub const USER_PROOFS_PROGRAM_ROM_VK: [u64; 4] =
     vk_bytes_to_u64_4(USER_PROOFS_PROGRAM_ROM_VK_BYTES);
 pub const CHUNK_PROGRAM_ROM_VK: [u64; 4] = vk_bytes_to_u64_4(CHUNK_PROGRAM_ROM_VK_BYTES);
 
-// ELF files for zisk programs
-const USER_PROOFS_ELF_PATH: &str =
-    "../../aggregation_programs/zisk/elf/zisk_user_proofs_aggregator_program";
-const CHUNK_ELF_PATH: &str = "../../aggregation_programs/zisk/elf/zisk_chunk_aggregator_program";
+// Directory where zisk aggregation programs are located (relative to repo root, intended to be run from root with make proof_aggregator_start)
+const ZISK_PROGRAMS_DIR: &str = "aggregation_mode/proof_aggregator/aggregation_programs/zisk";
 
-// Paths for cargo-zisk prove commands (relative to current_dir)
-const INPUT_PATH: &str = "input.bin";
-const OUTPUT_PATH: &str = "output";
-const SNARK_OUTPUT_PATH: &str = "snark_output";
+// ELF files for zisk programs (relative to ZISK_PROGRAMS_DIR)
+const USER_PROOFS_ELF_PATH: &str = "./elf/zisk_user_proofs_aggregator_program";
+const CHUNK_ELF_PATH: &str = "./elf/zisk_chunk_aggregator_program";
+
+// Paths for cargo-zisk prove commands (relative to ZISK_PROGRAMS_DIR)
+const INPUT_PATH: &str = "./input.bin";
+const OUTPUT_PATH: &str = "./output";
+const SNARK_OUTPUT_PATH: &str = "./snark_output";
 const PROVING_KEY_SNARK_DIR: &str = ".zisk/provingKeySnark";
 
 const fn vk_bytes_to_u64_4(bytes: &[u8]) -> [u64; 4] {
@@ -104,9 +106,12 @@ pub(crate) fn run_user_proofs_aggregator(
     );
     let input_bytes =
         bincode::serialize(&input).map_err(|e| AlignedZiskError::Serialization(e.to_string()))?;
-    std::fs::write(INPUT_PATH, input_bytes.as_slice())?;
 
-    command
+    // Write input file to the zisk programs directory
+    let input_file_path = format!("{ZISK_PROGRAMS_DIR}/input.bin");
+    std::fs::write(&input_file_path, input_bytes.as_slice())?;
+
+    let status = command
         .env("RUSTC", &zisk_rustc_path)
         .args([
             "prove",
@@ -119,9 +124,18 @@ pub(crate) fn run_user_proofs_aggregator(
             "-a",
             "-y",
         ])
-        .current_dir("../../aggregation_programs/zisk/");
+        .current_dir(ZISK_PROGRAMS_DIR)
+        .status()?;
 
-    let proof_bytes = std::fs::read(format!("{OUTPUT_PATH}/vadcop_final_proof.bin"))?;
+    if !status.success() {
+        return Err(AlignedZiskError::Aggregation(format!(
+            "cargo-zisk prove failed with exit code: {:?}",
+            status.code()
+        )));
+    }
+
+    let proof_path = format!("{ZISK_PROGRAMS_DIR}/output/vadcop_final_proof.bin");
+    let proof_bytes = std::fs::read(&proof_path)?;
     let proof = ZiskStarkProof { proof: proof_bytes };
 
     Ok(proof)
@@ -151,10 +165,13 @@ pub(crate) fn run_chunk_aggregator(
     };
     let input_bytes =
         bincode::serialize(&input).map_err(|e| AlignedZiskError::Serialization(e.to_string()))?;
-    std::fs::write(INPUT_PATH, input_bytes.as_slice())?;
+
+    // Write input file to the zisk programs directory
+    let input_file_path = format!("{ZISK_PROGRAMS_DIR}/input.bin");
+    std::fs::write(&input_file_path, input_bytes.as_slice())?;
 
     // generate stark proof
-    command
+    let status = command
         .env("RUSTC", &zisk_rustc_path)
         .args([
             "prove",
@@ -168,14 +185,22 @@ pub(crate) fn run_chunk_aggregator(
             "-y",
             "-f",
         ])
-        .current_dir("../../aggregation_programs/zisk/");
+        .current_dir(ZISK_PROGRAMS_DIR)
+        .status()?;
+
+    if !status.success() {
+        return Err(AlignedZiskError::Aggregation(format!(
+            "cargo-zisk prove (chunk) failed with exit code: {:?}",
+            status.code()
+        )));
+    }
 
     // wrap it to snark
     let stark_proof_path = format!("{OUTPUT_PATH}/vadcop_final_proof.bin");
     let home_dir = std::env::var("HOME").expect("HOME environment variable not set");
     let proving_key_path = format!("{home_dir}/{PROVING_KEY_SNARK_DIR}");
     let mut snark_command = std::process::Command::new("cargo-zisk");
-    snark_command
+    let snark_status = snark_command
         .env("RUSTC", &zisk_rustc_path)
         .args([
             "prove-snark",
@@ -186,12 +211,21 @@ pub(crate) fn run_chunk_aggregator(
             "-o",
             SNARK_OUTPUT_PATH,
         ])
-        .current_dir("../../aggregation_programs/zisk/");
+        .current_dir(ZISK_PROGRAMS_DIR)
+        .status()?;
 
-    let proof_bytes = std::fs::read(format!("{SNARK_OUTPUT_PATH}/proofs/final_snark_proof.bin"))?;
-    let public_values_bytes = std::fs::read(format!(
-        "{SNARK_OUTPUT_PATH}/proofs/final_snark_publics.bin"
-    ))?;
+    if !snark_status.success() {
+        return Err(AlignedZiskError::Aggregation(format!(
+            "cargo-zisk prove-snark failed with exit code: {:?}",
+            snark_status.code()
+        )));
+    }
+
+    let proof_path = format!("{ZISK_PROGRAMS_DIR}/snark_output/proofs/final_snark_proof.bin");
+    let public_values_path =
+        format!("{ZISK_PROGRAMS_DIR}/snark_output/proofs/final_snark_publics.bin");
+    let proof_bytes = std::fs::read(&proof_path)?;
+    let public_values_bytes = std::fs::read(&public_values_path)?;
 
     let proof = ZiskSnarkProof {
         proof: proof_bytes,
