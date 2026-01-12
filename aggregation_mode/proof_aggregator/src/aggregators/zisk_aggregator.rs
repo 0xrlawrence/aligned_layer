@@ -181,6 +181,7 @@ pub(crate) fn run_chunk_aggregator(
             INPUT_PATH,
             "-o",
             OUTPUT_PATH,
+            "-u",
             "-a",
             "-y",
             "-f",

@@ -6,10 +6,10 @@ use zisk_aggregation_program::{ChunkAggregatorInput, Hash32};
 
 // Generated with `make proof_aggregator_write_program_ids` and copied from program_ids.json
 pub const USER_PROOFS_AGGREGATOR_PROGRAM_ROM_ROOT: [u64; 4] = [
-    9552917093105913802,
-    7845128850459495418,
-    6121665346010988278,
-    15056293071596476132,
+    8006415978237093766,
+    9267864536843082901,
+    14454613831466088168,
+    10034785771278346133,
 ];
 
 pub fn main() {
@@ -23,22 +23,25 @@ pub fn main() {
         let proof_words = bytemuck::cast_slice::<u8, u64>(&proof.proof);
 
         // Reading public inputs as done in the verify of the lib at https://github.com/0xPolygonHermez/zisk/blob/maint/checkouts/pil2-proofman-3d49384e4e2f0af7/78497c5/verifier/src/verifier.rs#L66-L73
-        let mut p = 0;
-        let n_public_inputs = proof_words[p];
-        p += 1;
 
-        // we should end up with a vector of length 4 as the public input is a 256 bits digest
+        // First 64 bits are the length of public outputs so we skip it
+        let mut proof_idx = 1;
+
+        // Next 4 entries are the program rom-key
         let mut rom_vkey: [u64; 4] = [0_u64; 4];
-        let mut publics = Vec::new();
-        for i in 0..n_public_inputs {
-            // The first 4 entries are the rom vkey
-            if i < 4 {
-                rom_vkey[i as usize] = proof_words[p];
-                p += 1;
-            }
+        for i in 0..4 {
+            rom_vkey[i as usize] = proof_words[proof_idx];
+            proof_idx += 1;
+        }
 
-            publics.push(proof_words[p]);
-            p += 1;
+        // Next entry is the number of public inputs set by the program with 'ziskos::set_output'
+        // we should end up with a vector of length 4 as the public input is a 256 bits digest
+        let mut publics = Vec::new();
+        let n_public_inputs = proof_words[proof_idx];
+        proof_idx += 1;
+        for _ in 0..n_public_inputs {
+            publics.push(proof_words[proof_idx]);
+            proof_idx += 1;
         }
 
         // Ensure the aggregated chunk originates from the user proofs aggregation program.
