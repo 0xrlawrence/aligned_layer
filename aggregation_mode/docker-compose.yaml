@@ -20,8 +20,8 @@ volumes:
 
 networks:
   aligned-network:
-    external: true
     name: aligned-network
+    driver: bridge
 
 name: aggregation-mode
 services:
