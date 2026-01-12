@@ -14,6 +14,8 @@ x-node: &node
     PG_AUTOCTL_MONITOR: "postgresql://autoctl_node@monitor/pg_auto_failover"
   expose:
     - 5432
+  networks:
+    - aligned-network
 
 volumes:
   postgres_data:
@@ -60,6 +62,8 @@ services:
       - "5436:5432"
     command: |
       pg_autoctl create monitor --auth trust --run
+    networks:
+      - aligned-network
 
   node1:
     <<: *node
