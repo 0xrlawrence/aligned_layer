@@ -197,7 +197,9 @@ pub(crate) fn run_chunk_aggregator(
     }
 
     // Files needed to generate snark proof
-    let recursivef_path = format!("{ZISK_PROGRAMS_DIR}/recursivef.json");
+    let recursivef_tmp_dir_path = format!("{ZISK_PROGRAMS_DIR}/tmp");
+    std::fs::create_dir_all(&recursivef_tmp_dir_path)?;
+    let recursivef_path = format!("{ZISK_PROGRAMS_DIR}/tmp/recursivef.json");
     std::fs::File::create(&recursivef_path)?;
     let snark_output_dir = format!("{ZISK_PROGRAMS_DIR}/{SNARK_OUTPUT_PATH}");
     std::fs::create_dir_all(&snark_output_dir)?;
