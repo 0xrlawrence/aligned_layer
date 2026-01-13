@@ -5,6 +5,6 @@
   "sp1_chunk_aggregator_vk_hash": "0x00d6e32a34f68ea643362b96615591c94ee0bf99ee871740ab2337966a4f77af",
   "sp1_user_proofs_aggregator_vk_hash": "0x00a0fe3e73d4dd5f66369c60629213c8a037da04f8f68724c8a15ed1d20a0d5e",
   "sp1_user_proofs_aggregator_vk_hash_words": "[1350508345, 1966561241, 1188269068, 690044042, 29282343, 1675238547, 289586595, 1376390494]",
-  "zisk_chunk_aggregator_rom_vk_hex": "0xf0a4015be0771a215c0886c0c26ae18f57db03bcbf22ccea5e1e4de84d5f18d8",
+  "zisk_chunk_aggregator_rom_vk_hex": "0x751f8a607508d773a72daf54008b13f3c4ab03f53ee7f8245b7f5ae68ecf7b39",
   "zisk_user_proofs_aggregator_rom_vk": "[9828200352900212592, 4019846431993786936, 15417506412821928694, 4204912164237336264]"
 }
