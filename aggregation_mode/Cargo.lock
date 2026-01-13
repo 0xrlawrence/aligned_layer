@@ -3985,6 +3985,7 @@ dependencies = [
  "db",
  "hex",
  "prometheus",
+ "proofman-verifier",
  "serde",
  "serde_json",
  "serde_yaml",

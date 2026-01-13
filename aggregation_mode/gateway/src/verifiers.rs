@@ -5,6 +5,9 @@ use sp1_sdk::{CpuProver, Prover, ProverClient, SP1ProofWithPublicValues, SP1Veri
 static SP1_PROVER_CLIENT_CPU: LazyLock<CpuProver> =
     LazyLock::new(|| ProverClient::builder().cpu().build());
 
+const VADCOP_FINAL_VERKEY_BIN: &[u8] =
+    include_bytes!("../../proof_aggregator/aggregation_programs/zisk/vk/vadcop_final.verkey.bin");
+
 pub enum VerificationError {
     InvalidProof,
     UnsupportedProof,
@@ -26,7 +29,10 @@ pub fn verify_sp1_proof(
     Ok(())
 }
 
-/// TODO: implement Zisk proof verification
-pub fn verify_zisk_proof(_proof: &[u8]) -> Result<(), VerificationError> {
-    Ok(())
+pub fn verify_zisk_proof(proof: &[u8]) -> Result<(), VerificationError> {
+    if proofman_verifier::verify(proof, VADCOP_FINAL_VERKEY_BIN) {
+        Ok(())
+    } else {
+        Err(VerificationError::InvalidProof)
+    }
 }
