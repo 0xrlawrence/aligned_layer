@@ -34,9 +34,6 @@ fn build_zisk_programs() {
 
     let mut build_command = Command::new("cargo-zisk");
 
-    let mut user_proof_aggregator_rom_setup_command = Command::new("cargo-zisk");
-    let mut chunk_aggregator_rom_setup_command = Command::new("cargo-zisk");
-
     let mut user_proof_aggregator_rom_vk_command = Command::new("cargo-zisk");
     let mut chunk_aggregator_rom_vk_command = Command::new("cargo-zisk");
 
@@ -52,37 +49,6 @@ fn build_zisk_programs() {
 
     if !build_status.success() {
         panic!("Failed to build zisk elfs");
-    }
-
-    // Zisk rom-setup commands
-    let user_proof_aggregator_rom_setup_status = user_proof_aggregator_rom_setup_command
-        .args([
-            "rom-setup",
-            "--elf",
-            "./target/riscv64ima-zisk-zkvm-elf/release/zisk_user_proofs_aggregator_program",
-        ])
-        .env("RUSTC", &zisk_rustc_path)
-        .current_dir("./aggregation_programs/")
-        .status()
-        .unwrap();
-
-    if !user_proof_aggregator_rom_setup_status.success() {
-        panic!("Failed to execute rom-setup command on user proof aggregator program");
-    }
-
-    let chunk_aggregator_rom_setup_status = chunk_aggregator_rom_setup_command
-        .args([
-            "rom-setup",
-            "--elf",
-            "./target/riscv64ima-zisk-zkvm-elf/release/zisk_chunk_aggregator_program",
-        ])
-        .env("RUSTC", &zisk_rustc_path)
-        .current_dir("./aggregation_programs/")
-        .status()
-        .unwrap();
-
-    if !chunk_aggregator_rom_setup_status.success() {
-        panic!("Failed to execute rom-setup command on chunk aggregator program");
     }
 
     // Zisk rom-vkey commands

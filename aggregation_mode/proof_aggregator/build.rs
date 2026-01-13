@@ -54,4 +54,54 @@ fn main() {
         "risc0_aggregation_program",
         guest_options,
     )]));
+
+    // Zisk rom-setup commands
+    // Steps followed from https://0xpolygonhermez.github.io/zisk/getting_started/writing_programs.html#build
+    let zisk_rustc_path = rustc_path_for("zisk");
+
+    let mut user_proof_aggregator_rom_setup_command = std::process::Command::new("cargo-zisk");
+    let mut chunk_aggregator_rom_setup_command = std::process::Command::new("cargo-zisk");
+
+    let user_proof_aggregator_rom_setup_status = user_proof_aggregator_rom_setup_command
+        .args([
+            "rom-setup",
+            "--elf",
+            "./zisk/elf/zisk_user_proofs_aggregator_program",
+        ])
+        .env("RUSTC", &zisk_rustc_path)
+        .current_dir("./aggregation_programs/")
+        .status()
+        .unwrap();
+
+    if !user_proof_aggregator_rom_setup_status.success() {
+        panic!("Failed to execute rom-setup command on user proof aggregator program");
+    }
+
+    let chunk_aggregator_rom_setup_status = chunk_aggregator_rom_setup_command
+        .args([
+            "rom-setup",
+            "--elf",
+            "./zisk/elf/zisk_chunk_aggregator_program",
+        ])
+        .env("RUSTC", &zisk_rustc_path)
+        .current_dir("./aggregation_programs/")
+        .status()
+        .unwrap();
+
+    if !chunk_aggregator_rom_setup_status.success() {
+        panic!("Failed to execute rom-setup command on chunk aggregator program");
+    }
+}
+
+fn rustc_path_for(toolchain: &str) -> std::path::PathBuf {
+    let output = std::process::Command::new("rustup")
+        .args(["which", "rustc", "--toolchain", toolchain])
+        .output()
+        .expect("failed to execute rustup");
+
+    if !output.status.success() {
+        panic!("rustup which rustc failed for toolchain {toolchain}");
+    }
+
+    std::path::PathBuf::from(String::from_utf8_lossy(&output.stdout).trim())
 }
