@@ -6,10 +6,10 @@ use zisk_aggregation_program::{ChunkAggregatorInput, Hash32};
 
 // Generated with `make proof_aggregator_write_program_ids` and copied from program_ids.json
 pub const USER_PROOFS_AGGREGATOR_PROGRAM_ROM_ROOT: [u64; 4] = [
-    8006415978237093766,
-    9267864536843082901,
-    14454613831466088168,
-    10034785771278346133,
+    6589631844296419412,
+    9245669750987062479,
+    9069898615149755662,
+    9755939384656322398,
 ];
 
 pub fn main() {
@@ -53,7 +53,7 @@ pub fn main() {
         let mut merkle_root = [0u8; 32];
         for (idx, word) in publics.iter().enumerate() {
             let start = idx * 4;
-            merkle_root[start..start + 4].copy_from_slice(&( *word as u32).to_le_bytes());
+            merkle_root[start..start + 4].copy_from_slice(&(*word as u32).to_le_bytes());
         }
 
         // Reconstruct the merkle tree and verify that the roots match
