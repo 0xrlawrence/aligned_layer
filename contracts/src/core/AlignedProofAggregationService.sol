@@ -110,7 +110,7 @@ contract AlignedProofAggregationService is
         emit AggregatedProofVerified(merkleRoot, blobVersionedHash);
     }
 
-    function verifyAggregationZisk(bytes32 blobVersionedHash, uint64[4] calldata programVK, bytes calldata publicValues, bytes calldata proofBytes, bytes32 verifierProgramCommitment)
+    function verifyAggregationZisk(bytes32 blobVersionedHash, bytes calldata publicValues, bytes calldata proofBytes, bytes32 verifierProgramCommitment)
         public
         onlyAlignedAggregator
     {
@@ -119,6 +119,15 @@ contract AlignedProofAggregationService is
         if (allowedVerifiersProvingSystem[verifierProgramCommitment] != ZISK_ID) {
             revert InvalidVerifyingProgram(verifierProgramCommitment, ZISK_ID, allowedVerifiersProvingSystem[verifierProgramCommitment]);
         }
+
+        // Cast verifierProgramCommitment (bytes32) to uint64[4]
+        uint256 commitment = uint256(verifierProgramCommitment);
+        uint64[4] memory programVK = [
+            uint64(commitment >> 192),
+            uint64(commitment >> 128),
+            uint64(commitment >> 64),
+            uint64(commitment)
+        ];
 
         IZiskVerifier(ziskVerifierAddress).verifySnarkProof(programVK, publicValues, proofBytes);
 

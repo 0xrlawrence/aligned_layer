@@ -36,11 +36,10 @@ interface IAlignedProofAggregationService {
     /// @dev This function is called by the aligned proof aggregator after collecting the proofs and aggregating them
     /// to be verified on-chain. We expect the blobTransactionHash to be called before
     /// @param blobVersionedHash the versioned hash of the blob transaction that contains the leaves that compose the merkle root.
-    /// @param programVK The verification key for the RISC-V program
     /// @param publicValues The public values encoded as bytes
     /// @param proofBytes The proof of the program execution the Zisk zkVM encoded as bytes
-    /// @param verifierProgramCommitment The chunk aggregator verifier program commitment against which the proof should be verified
-    function verifyAggregationZisk(bytes32 blobVersionedHash, uint64[4] calldata programVK, bytes calldata publicValues, bytes calldata proofBytes, bytes32 verifierProgramCommitment)
+    /// @param verifierProgramCommitment The chunk aggregator verifier program commitment against which the proof should be verified (also used as programVK)
+    function verifyAggregationZisk(bytes32 blobVersionedHash, bytes calldata publicValues, bytes calldata proofBytes, bytes32 verifierProgramCommitment)
         external;
 
     function isProofVerified(

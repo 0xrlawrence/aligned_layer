@@ -371,7 +371,6 @@ impl ProofAggregator {
                 .proof_aggregation_service
                 .verifyAggregationZisk(
                     blob_versioned_hash.into(),
-                    proof.vk.clone().into(),
                     proof.public_values.to_vec().into(),
                     proof.proof.to_vec().into(),
                     self.zisk_chunk_aggregator_vk_hash_bytes.into(),
