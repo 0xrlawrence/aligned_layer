@@ -209,7 +209,7 @@ pub(crate) fn run_chunk_aggregator(
     let home_dir = std::env::var("HOME").expect("HOME environment variable not set");
     let proving_key_path = format!("{home_dir}/{PROVING_KEY_SNARK_DIR}");
     let snark_status = {
-        let mut run_snark = || {
+        let run_snark = || {
             std::process::Command::new("cargo-zisk")
                 .env("RUSTC", &zisk_rustc_path)
                 .args([

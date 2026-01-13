@@ -6,10 +6,10 @@ use zisk_aggregation_program::{ChunkAggregatorInput, Hash32};
 
 // Generated with `make proof_aggregator_write_program_ids` and copied from program_ids.json
 pub const USER_PROOFS_AGGREGATOR_PROGRAM_ROM_ROOT: [u64; 4] = [
-    6589631844296419412,
-    9245669750987062479,
-    9069898615149755662,
-    9755939384656322398,
+    8918270117987205319,
+    12050120792505928497,
+    8656656222693962305,
+    1444176778874533146,
 ];
 
 pub fn main() {
