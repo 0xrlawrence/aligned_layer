@@ -208,20 +208,26 @@ pub(crate) fn run_chunk_aggregator(
     let stark_proof_path = format!("{OUTPUT_PATH}/vadcop_final_proof.bin");
     let home_dir = std::env::var("HOME").expect("HOME environment variable not set");
     let proving_key_path = format!("{home_dir}/{PROVING_KEY_SNARK_DIR}");
-    let mut snark_command = std::process::Command::new("cargo-zisk");
-    let snark_status = snark_command
-        .env("RUSTC", &zisk_rustc_path)
-        .args([
-            "prove-snark",
-            "-p",
-            &stark_proof_path,
-            "-k",
-            &proving_key_path,
-            "-o",
-            SNARK_OUTPUT_PATH,
-        ])
-        .current_dir(ZISK_PROGRAMS_DIR)
-        .status()?;
+    let snark_status = {
+        let mut run_snark = || {
+            std::process::Command::new("cargo-zisk")
+                .env("RUSTC", &zisk_rustc_path)
+                .args([
+                    "prove-snark",
+                    "-p",
+                    &stark_proof_path,
+                    "-k",
+                    &proving_key_path,
+                    "-o",
+                    SNARK_OUTPUT_PATH,
+                ])
+                .current_dir(ZISK_PROGRAMS_DIR)
+                .status()
+        };
+        // Dark magic: the first run tends to fail, while the second succeeds.
+        let _ = run_snark()?;
+        run_snark()?
+    };
 
     if !snark_status.success() {
         return Err(AlignedZiskError::Aggregation(format!(
