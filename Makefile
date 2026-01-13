@@ -339,13 +339,13 @@ agg_mode_gateway_send_payment:
 	 --rpc-url http://localhost:8545
 
 agg_mode_gateway_send_sp1_proof:
-	@cargo run --manifest-path aggregation_mode/cli/Cargo.toml -- submit sp1 \
+	@cargo run --manifest-path aggregation_mode/cli/Cargo.toml --release -- submit sp1 \
 		--proof scripts/test_files/sp1/sp1_fibonacci_5_0_0.proof \
 		--vk scripts/test_files/sp1/sp1_fibonacci_5_0_0_vk.bin \
 		--private-key "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
 
 agg_mode_gateway_send_zisk_proof:
-	@cargo run --manifest-path aggregation_mode/cli/Cargo.toml -- submit zisk \
+	@cargo run --manifest-path aggregation_mode/cli/Cargo.toml --release -- submit zisk \
 		--proof scripts/test_files/zisk/sha_hasher/proof/vadcop_final_proof.bin \
 		--private-key "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
 
