@@ -2,7 +2,7 @@ use alloy::hex;
 use proof_aggregator::aggregators::{risc0_aggregator, sp1_aggregator, zisk_aggregator};
 use serde_json::json;
 use sp1_sdk::HashableKey;
-use std::{fs, path::Path};
+use std::{fs, path::Path, process::Command};
 use tracing::info;
 use tracing_subscriber::FmtSubscriber;
 
@@ -12,9 +12,136 @@ const SP1_USER_PROOFS_AGGREGATOR_PROGRAM_ELF: &[u8] =
 const SP1_CHUNK_AGGREGATOR_PROGRAM_ELF: &[u8] =
     include_bytes!("../aggregation_programs/sp1/elf/sp1_chunk_aggregator_program");
 
+fn rustc_path_for(toolchain: &str) -> std::path::PathBuf {
+    let output = Command::new("rustup")
+        .args(["which", "rustc", "--toolchain", toolchain])
+        .output()
+        .expect("failed to execute rustup");
+
+    if !output.status.success() {
+        panic!("rustup which rustc failed for toolchain {toolchain}");
+    }
+
+    std::path::PathBuf::from(String::from_utf8_lossy(&output.stdout).trim())
+}
+
+fn build_zisk_programs() {
+    // Steps followed from https://0xpolygonhermez.github.io/zisk/getting_started/writing_programs.html#build
+
+    // build.rs runs a subprocess without the shell's rustup selection; set the toolchain
+    // explicitly so cargo-zisk uses Zisk's rustc instead of the host toolchain.
+    let zisk_rustc_path = rustc_path_for("zisk");
+
+    let mut build_command = Command::new("cargo-zisk");
+
+    let mut user_proof_aggregator_rom_setup_command = Command::new("cargo-zisk");
+    let mut chunk_aggregator_rom_setup_command = Command::new("cargo-zisk");
+
+    let mut user_proof_aggregator_rom_vk_command = Command::new("cargo-zisk");
+    let mut chunk_aggregator_rom_vk_command = Command::new("cargo-zisk");
+
+    // Zisk build elf command
+    build_command
+        .env("RUSTC", &zisk_rustc_path)
+        .args(["build", "--release"])
+        .current_dir("aggregation_programs/zisk/");
+
+    let build_status = build_command
+        .status()
+        .expect("Failed to execute zisk build command");
+
+    if !build_status.success() {
+        panic!("Failed to build zisk elfs");
+    }
+
+    // Zisk rom-setup commands
+    let user_proof_aggregator_rom_setup_status = user_proof_aggregator_rom_setup_command
+        .args([
+            "rom-setup",
+            "--elf",
+            "./target/riscv64ima-zisk-zkvm-elf/release/zisk_user_proofs_aggregator_program",
+        ])
+        .env("RUSTC", &zisk_rustc_path)
+        .current_dir("./aggregation_programs/")
+        .status()
+        .unwrap();
+
+    if !user_proof_aggregator_rom_setup_status.success() {
+        panic!("Failed to execute rom-setup command on user proof aggregator program");
+    }
+
+    let chunk_aggregator_rom_setup_status = chunk_aggregator_rom_setup_command
+        .args([
+            "rom-setup",
+            "--elf",
+            "./target/riscv64ima-zisk-zkvm-elf/release/zisk_chunk_aggregator_program",
+        ])
+        .env("RUSTC", &zisk_rustc_path)
+        .current_dir("./aggregation_programs/")
+        .status()
+        .unwrap();
+
+    if !chunk_aggregator_rom_setup_status.success() {
+        panic!("Failed to execute rom-setup command on chunk aggregator program");
+    }
+
+    // Zisk rom-vkey commands
+    let user_proofs_aggregator_rom_vkey_status = user_proof_aggregator_rom_vk_command
+        .args([
+            "rom-vkey",
+            "--elf",
+            "./target/riscv64ima-zisk-zkvm-elf/release/zisk_user_proofs_aggregator_program",
+            "-o",
+            "zisk/vk/zisk_user_proofs_aggregator_program",
+        ])
+        .env("RUSTC", &zisk_rustc_path)
+        .current_dir("./aggregation_programs/")
+        .status()
+        .unwrap();
+
+    if !user_proofs_aggregator_rom_vkey_status.success() {
+        panic!("Failed to execute rom-vkey command on user proofs aggregator program");
+    }
+
+    let chunk_aggregator_rom_vkey_status = chunk_aggregator_rom_vk_command
+        .args([
+            "rom-vkey",
+            "--elf",
+            "./target/riscv64ima-zisk-zkvm-elf/release/zisk_chunk_aggregator_program",
+            "-o",
+            "zisk/vk/zisk_chunk_aggregator_program",
+        ])
+        .env("RUSTC", &zisk_rustc_path)
+        .current_dir("./aggregation_programs/")
+        .status()
+        .unwrap();
+
+    if !chunk_aggregator_rom_vkey_status.success() {
+        panic!("Failed to execute rom-vkey command on chunk aggregator program");
+    }
+
+    let _ = fs::create_dir("./aggregation_programs/zisk/elf");
+
+    fs::copy(
+        "./aggregation_programs/target/riscv64ima-zisk-zkvm-elf/release/zisk_user_proofs_aggregator_program",
+        "./aggregation_programs/zisk/elf/zisk_user_proofs_aggregator_program",
+    )
+    .expect("Could not copy zisk_user_proofs_aggregator_program elf to aggregation_programs/zisk/elf directory");
+
+    fs::copy(
+        "./aggregation_programs/target/riscv64ima-zisk-zkvm-elf/release/zisk_chunk_aggregator_program",
+        "./aggregation_programs/zisk/elf/zisk_chunk_aggregator_program",
+    )
+    .expect("Could not copy zisk_chunk_aggregator_program elf to aggregation_programs/zisk/elf directory");
+}
+
 fn main() {
     let subscriber = FmtSubscriber::builder().finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+
+    info!("Building zisk programs...");
+    build_zisk_programs();
+    info!("Zisk programs built successfully");
 
     info!(
         "About to write sp1 programs vk hash bytes + risc0 programs image id bytes + zisk rom vk"
