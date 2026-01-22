@@ -1658,3 +1658,220 @@ __NODE_EXPORTER_:
 
 install_node_exporter:
 	@./scripts/install_node_exporter.sh
+
+# ==============================================================================
+# Aggregation Mode Ansible Deployment
+# ==============================================================================
+
+AGG_MODE_ANSIBLE_DIR = infra/aggregation_mode/ansible
+AGG_MODE_PLAYBOOKS_DIR = $(AGG_MODE_ANSIBLE_DIR)/playbooks
+AGG_MODE_INI_DIR = $(AGG_MODE_PLAYBOOKS_DIR)/ini
+
+# TODO: Check and add targets to install gateway, poller and cli binaries locally
+
+# ------------------------------------------------------------------------------
+# PostgreSQL Cluster Deployment
+# ------------------------------------------------------------------------------
+
+.PHONY: postgres_deploy
+postgres_deploy: ## Deploy PostgreSQL Auto-Failover Cluster. Usage: make postgres_deploy ENV=hoodi
+	@if [ -z "$(ENV)" ]; then \
+		echo "Error: ENV must be set (hoodi or mainnet)"; \
+		exit 1; \
+	fi
+	@ansible-playbook $(AGG_MODE_PLAYBOOKS_DIR)/postgres_cluster.yaml \
+		-i $(AGG_MODE_ANSIBLE_DIR)/$(ENV)-inventory.yaml \
+		-e "env=$(ENV)"
+
+.PHONY: postgres_monitor_deploy
+postgres_monitor_deploy: ## Deploy PostgreSQL Monitor only. Usage: make postgres_monitor_deploy ENV=hoodi
+	@if [ -z "$(ENV)" ]; then \
+		echo "Error: ENV must be set (hoodi or mainnet)"; \
+		exit 1; \
+	fi
+	@ansible-playbook $(AGG_MODE_PLAYBOOKS_DIR)/pg_monitor.yaml \
+		-i $(AGG_MODE_ANSIBLE_DIR)/$(ENV)-inventory.yaml \
+		-e "host=postgres_monitor" \
+		-e "env=$(ENV)"
+
+.PHONY: postgres_nodes_deploy
+postgres_nodes_deploy: ## Deploy PostgreSQL Primary & Secondary. Usage: make postgres_nodes_deploy ENV=hoodi
+	@if [ -z "$(ENV)" ]; then \
+		echo "Error: ENV must be set (hoodi or mainnet)"; \
+		exit 1; \
+	fi
+	@ansible-playbook $(AGG_MODE_PLAYBOOKS_DIR)/pg_node.yaml \
+		-i $(AGG_MODE_ANSIBLE_DIR)/$(ENV)-inventory.yaml \
+		-e "host=postgres_1" \
+		-e "env=$(ENV)"
+	@ansible-playbook $(AGG_MODE_PLAYBOOKS_DIR)/pg_node.yaml \
+		-i $(AGG_MODE_ANSIBLE_DIR)/$(ENV)-inventory.yaml \
+		-e "host=postgres_2" \
+		-e "env=$(ENV)"
+
+.PHONY: postgres_migrations
+postgres_migrations: ## Run database migrations. Usage: make postgres_migrations ENV=hoodi
+	@if [ -z "$(ENV)" ]; then \
+		echo "Error: ENV must be set (hoodi or mainnet)"; \
+		exit 1; \
+	fi
+	@ansible-playbook $(AGG_MODE_PLAYBOOKS_DIR)/postgres_migrations.yaml \
+		-i $(AGG_MODE_ANSIBLE_DIR)/$(ENV)-inventory.yaml \
+		-e "host=postgres_1" \
+		-e "env=$(ENV)"
+
+.PHONY: postgres_status
+postgres_status: ## Check PostgreSQL cluster status. Usage: make postgres_status ENV=hoodi
+	@if [ -z "$(ENV)" ]; then \
+		echo "Error: ENV must be set (hoodi or mainnet)"; \
+		exit 1; \
+	fi
+	@ansible postgres_monitor -i $(AGG_MODE_ANSIBLE_DIR)/$(ENV)-inventory.yaml \
+		-m shell -a "sudo -u postgres pg_autoctl show state --monitor postgres://autoctl_node@localhost:5432/pg_auto_failover" --become
+
+# ------------------------------------------------------------------------------
+# Gateway & Poller Deployment
+# ------------------------------------------------------------------------------
+
+.PHONY: gateway_deploy
+gateway_deploy: ## Deploy Gateway & Poller on both servers. Usage: make gateway_deploy ENV=hoodi [FORCE_REBUILD=true]
+	@if [ -z "$(ENV)" ]; then \
+		echo "Error: ENV must be set (hoodi or mainnet)"; \
+		exit 1; \
+	fi
+	@EXTRA_VARS=""; \
+	if [ -n "$(FORCE_REBUILD)" ]; then \
+		EXTRA_VARS="-e force_rebuild=true"; \
+	fi; \
+	ansible-playbook $(AGG_MODE_PLAYBOOKS_DIR)/gateway_stack.yaml \
+		-i $(AGG_MODE_ANSIBLE_DIR)/$(ENV)-inventory.yaml \
+		-e "host=gateway_1" \
+		-e "env=$(ENV)" \
+		$$EXTRA_VARS
+	@EXTRA_VARS=""; \
+	if [ -n "$(FORCE_REBUILD)" ]; then \
+		EXTRA_VARS="-e force_rebuild=true"; \
+	fi; \
+	ansible-playbook $(AGG_MODE_PLAYBOOKS_DIR)/gateway_stack.yaml \
+		-i $(AGG_MODE_ANSIBLE_DIR)/$(ENV)-inventory.yaml \
+		-e "host=gateway_2" \
+		-e "env=$(ENV)" \
+		$$EXTRA_VARS
+
+.PHONY: gateway_1_deploy
+gateway_1_deploy: ## Deploy Gateway & Poller on gateway 1 only. Usage: make gateway_1_deploy ENV=hoodi [FORCE_REBUILD=true]
+	@if [ -z "$(ENV)" ]; then \
+		echo "Error: ENV must be set (hoodi or mainnet)"; \
+		exit 1; \
+	fi
+	@EXTRA_VARS=""; \
+	if [ -n "$(FORCE_REBUILD)" ]; then \
+		EXTRA_VARS="-e force_rebuild=true"; \
+	fi; \
+	ansible-playbook $(AGG_MODE_PLAYBOOKS_DIR)/gateway_stack.yaml \
+		-i $(AGG_MODE_ANSIBLE_DIR)/$(ENV)-inventory.yaml \
+		-e "host=gateway_1" \
+		-e "env=$(ENV)" \
+		$$EXTRA_VARS
+
+.PHONY: gateway_2_deploy
+gateway_2_deploy: ## Deploy Gateway & Poller on gateway 2 only. Usage: make gateway_2_deploy ENV=hoodi [FORCE_REBUILD=true]
+	@if [ -z "$(ENV)" ]; then \
+		echo "Error: ENV must be set (hoodi or mainnet)"; \
+		exit 1; \
+	fi
+	@EXTRA_VARS=""; \
+	if [ -n "$(FORCE_REBUILD)" ]; then \
+		EXTRA_VARS="-e force_rebuild=true"; \
+	fi; \
+	ansible-playbook $(AGG_MODE_PLAYBOOKS_DIR)/gateway_stack.yaml \
+		-i $(AGG_MODE_ANSIBLE_DIR)/$(ENV)-inventory.yaml \
+		-e "host=gateway_2" \
+		-e "env=$(ENV)" \
+		$$EXTRA_VARS
+
+# ------------------------------------------------------------------------------
+# Metrics Deployment
+# ------------------------------------------------------------------------------
+
+.PHONY: metrics_deploy
+metrics_deploy: ## Deploy Prometheus & Grafana. Usage: make metrics_deploy ENV=hoodi
+	@if [ -z "$(ENV)" ]; then \
+		echo "Error: ENV must be set (hoodi or mainnet)"; \
+		exit 1; \
+	fi
+	@ansible-playbook $(AGG_MODE_PLAYBOOKS_DIR)/metrics_stack.yaml \
+		-i $(AGG_MODE_ANSIBLE_DIR)/$(ENV)-inventory.yaml \
+		-e "host=metrics" \
+		-e "env=$(ENV)"
+
+.PHONY: prometheus_deploy
+prometheus_deploy: ## Deploy Prometheus only. Usage: make prometheus_deploy ENV=hoodi
+	@if [ -z "$(ENV)" ]; then \
+		echo "Error: ENV must be set (hoodi or mainnet)"; \
+		exit 1; \
+	fi
+	@ansible-playbook $(AGG_MODE_PLAYBOOKS_DIR)/prometheus_agg_mode.yaml \
+		-i $(AGG_MODE_ANSIBLE_DIR)/$(ENV)-inventory.yaml \
+		-e "host=metrics" \
+		-e "env=$(ENV)"
+
+.PHONY: grafana_deploy
+grafana_deploy: ## Deploy Grafana only. Usage: make grafana_deploy ENV=hoodi
+	@if [ -z "$(ENV)" ]; then \
+		echo "Error: ENV must be set (hoodi or mainnet)"; \
+		exit 1; \
+	fi
+	@ansible-playbook $(AGG_MODE_PLAYBOOKS_DIR)/grafana_agg_mode.yaml \
+		-i $(AGG_MODE_ANSIBLE_DIR)/$(ENV)-inventory.yaml \
+		-e "host=metrics" \
+		-e "env=$(ENV)"
+
+# ------------------------------------------------------------------------------
+# Task Sender Deployment
+# ------------------------------------------------------------------------------
+
+.PHONY: task_sender_deploy
+task_sender_deploy: ## Deploy task sender. Usage: make task_sender_deploy ENV=hoodi
+	@if [ -z "$(ENV)" ]; then \
+		echo "Error: ENV must be set (hoodi or mainnet)"; \
+		exit 1; \
+	fi
+	@ansible-playbook $(AGG_MODE_PLAYBOOKS_DIR)/task_sender.yaml \
+		-i $(AGG_MODE_ANSIBLE_DIR)/$(ENV)-inventory.yaml \
+		-e "host=task_sender" \
+		-e "env=$(ENV)"
+
+.PHONY: task_sender_status
+task_sender_status: ## Check task sender status. Usage: make task_sender_status ENV=hoodi
+	@if [ -z "$(ENV)" ]; then \
+		echo "Error: ENV must be set (hoodi or mainnet)"; \
+		exit 1; \
+	fi
+	@echo "Checking task sender tmux session..."
+	@ansible -i $(AGG_MODE_ANSIBLE_DIR)/$(ENV)-inventory.yaml task_sender \
+		-m shell \
+		-a "tmux has-session -t task_sender && echo 'Task sender is running' || echo 'Task sender is not running'"
+
+.PHONY: task_sender_logs
+task_sender_logs: ## View task sender logs. Usage: make task_sender_logs ENV=hoodi
+	@if [ -z "$(ENV)" ]; then \
+		echo "Error: ENV must be set (hoodi or mainnet)"; \
+		exit 1; \
+	fi
+	@echo "Use: ssh app@agg-mode-$(ENV)-task-sender 'tmux attach -t task_sender'"
+	@echo "Or: ssh app@agg-mode-$(ENV)-task-sender 'tmux capture-pane -t task_sender -p'"
+
+# ------------------------------------------------------------------------------
+# Full Deployment
+# ------------------------------------------------------------------------------
+
+.PHONY: agg_mode_deploy_all
+agg_mode_deploy_all: ## Deploy entire aggregation mode stack. Usage: make agg_mode_deploy_all ENV=hoodi
+	@if [ -z "$(ENV)" ]; then \
+		echo "Error: ENV must be set (hoodi or mainnet)"; \
+		exit 1; \
+	fi
+	@ansible-playbook $(AGG_MODE_PLAYBOOKS_DIR)/deploy_all.yaml \
+		-i $(AGG_MODE_ANSIBLE_DIR)/$(ENV)-inventory.yaml \
+		-e "env=$(ENV)"
