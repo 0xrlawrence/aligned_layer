@@ -1,64 +1,97 @@
 # Proof Aggregation Service Deep Dive
 
-The Proof Aggregation Service runs **once every 24 hours** and performs the following steps:
+## Architecture Overview
 
-1. **Fetch Proofs from the Verification Layer**  
-   Queries `NewBatchV3` events from the `AlignedLayerServiceManager` and downloads the batches from `S3`, starting from the last processed block of the previous run.
+The Proof Aggregation Service consists of three main components that work together to aggregate user proofs and submit them on-chain.
 
-2. **Filter Proofs**  
-   Filters proofs by supported verifiers and proof types.
+```
+┌──────┐    ┌───────────────────────────────┐    ┌─────────────┐
+│      │ 1  │ AggregationModePaymentService │ 2  │   Payments  │
+│      │--->│           (Contract)          │--->│    Poller   │
+│      │    └───────────────────────────────┘    └─────┬───────┘
+│      │                                               │
+│      │                                             3 │
+│      │                                               v
+│      │    ┌───────────────┐  5                ┌──────────────┐    ┌───────────────────────────────┐
+│ User │ 4  │    Gateway    │------------------>│  PostgreSQL  │    │ AlignedProofAggregationService│
+│      │--->│               │                   │      DB      │    │           (Contract)          │
+│      │    └───────────────┘                   └──────────────┘    └───────────────────────────────┘
+│      │                                               ^                          ^
+│      │                                             6 │                          │
+│      │                                               │                        7 │
+│      │                                        ┌─────────────┐                   │
+│      │                                        │    Proof    │-------------------┘
+│      │                                        │  Aggregator │
+└──────┘                                        └─────────────┘
+```
 
-3. **Aggregate Proofs in the zkVM**  
-   Selected proofs are aggregated using a zkVM.
+1. User deposits ETH into `AggregationModePaymentService` contract to get quota.
+2. `Payments Poller` monitors the contract for deposit events.
+3. `Payments Poller` updates user quotas in the database.
+4. User submits proofs to the `Gateway`.
+5. `Gateway` validates and stores proofs in the database.
+6. `Proof Aggregator` fetches pending proofs from the database.
+7. `Proof Aggregator` aggregates proofs in the zkVM and submits to `AlignedProofAggregationService` contract.
 
-4. **Construct the Blob**  
-   A blob is built containing the [commitments](#proof-commitment) of the aggregated proofs.
+## Supported Proof Types
 
-5. **Send Aggregated Proof**  
-   The final aggregated proof and its blob are sent to the `AlignedProofAggregationService` contract for verification.
+The aggregation service currently supports:
 
-> [Note]
-> Currently if you want your proof to be verified in the `AggregationMode` you need to submit it via the `VerificationLayer`. In the future, users will have the option to choose whether they want to continue using this method or switch to using only the Aggregation service.
-
-## Aggregators and Supported Proof Types
-
-Two separate aggregators are run every 24 hours:
-
--   **Risc0**: Aggregates proofs of types `Composite` and `Succinct`.
--   **SP1**: Aggregates proofs of type `Compressed`.
+-   **SP1**: Aggregates proofs of type `Compressed`
 
 ## Proof Commitment
 
 The **proof commitment** is a hash that uniquely identifies a proof. It is defined as the keccak of the proof public inputs + program ID:
 
--   **For SP1**:  
+-   **For SP1**:
     The commitment is computed as: `keccak(proof_public_inputs_bytes || vk_hash_bytes)`
--   **For Risc0**:  
-    The commitment is computed as: `keccack(receipt_public_inputs_bytes || image_id_bytes)`
 
 ## Multilayer Aggregation
 
-To scale aggregation without exhausting zkVM memory, aggregation is split in two programs:
+To scale aggregation without exhausting zkVM memory, aggregation is split into two programs:
 
-1. **User Proof Aggregator**  
-   Processes chunks of `n` user proofs. Each run creates an aggregated proof that commits to a Merkle root of the user proofs inputs. This step is repeated for as many chunks as needed. Usually each chunks contains `256` proofs but it can be lowered based on the machine specs.
+```
+                        User Proofs (n per chunk)
+                                  │
+          ┌───────────────────────┼───────────────────────┐
+          │                       │                       │
+          ▼                       ▼                       ▼
+   ┌─────────────┐         ┌─────────────┐         ┌─────────────┐
+   │   Chunk 1   │         │   Chunk 2   │         │   Chunk N   │
+   │  Aggregator │         │  Aggregator │         │  Aggregator │
+   └──────┬──────┘         └──────┬──────┘         └──────┬──────┘
+          │                       │                       │
+          │    Aggregated Proofs + Merkle Roots           │
+          │                       │                       │
+          └───────────────────────┼───────────────────────┘
+                                  │
+                                  ▼
+                        ┌─────────────────┐
+                        │     Chunk       │
+                        │   Aggregator    │
+                        └────────┬────────┘
+                                 │
+                                 ▼
+                        ┌─────────────────┐
+                        │  Final Proof +  │
+                        │   Merkle Root   │
+                        └─────────────────┘
+```
 
-2. **Chunk Aggregator**  
+1. **User Proof Aggregator**
+   Processes chunks of `n` user proofs. Each run creates an aggregated proof that commits to a Merkle root of the user proofs inputs. This step is repeated for as many chunks as needed. Usually each chunk contains `256` proofs but it can be lowered based on the machine specs.
+
+2. **Chunk Aggregator**
    Aggregates all chunk-level proofs into a single final proof. It receives:
 
     - The chunked proofs
-    - The original [proofs commitments](#proof-commitment) included each chunk received
+    - The original [proofs commitments](#proof-commitment) included in each chunk received
 
-    During verification, it checks that each chunk’s committed Merkle root matches the reconstructed root to ensure input correctness. The final Merkle root, representing all user [proofs commitments](#proof-commitment), is then committed as a public input.
+    During verification, it checks that each chunk's committed Merkle root matches the reconstructed root to ensure input correctness. The final Merkle root, representing all user [proofs commitments](#proof-commitment), is then committed as a public input.
 
 ## Verification
 
-Once aggregated, the proof is sent to Ethereum and verified via the `AlignedProofAggregationService` contract. Depending on the proving system, the contract invokes:
-
--   `verifySP1` for SP1 proofs
--   `verifyRisc0` for Risc0 proofs
-
-Each function receives:
+Once aggregated, the proof is sent to Ethereum and verified via the `AlignedProofAggregationService` contract. The contract invokes `verifySP1` which receives:
 
 -   The public inputs
 -   The proof binary
@@ -69,17 +102,17 @@ If verification succeeds, the new proof is added to the `aggregatedProofs` map i
 
 ### Proof Inclusion Verification
 
-To verify a user’s proof on-chain, the following must be provided:
+To verify a user's proof on-chain, the following must be provided:
 
 -   The proof bytes
 -   The proof public inputs
--   The program ID
+-   The program ID (vk hash)
 -   A Merkle proof
 
-The Merkle root is computed and checked for existence in the contract using the `verifyProofInclusion` function of the `ProofAggregationServiceContract`, which:
+The Merkle root is computed and checked for existence in the contract using the `verifyProofInclusion` function of the `AlignedProofAggregationService` contract, which:
 
 1. Computes the merkle root
-2. Returns `true` or `false` depending if there exists an `aggregatedProof` with the computed root.
+2. Returns `true` or `false` depending on whether there exists an `aggregatedProof` with the computed root.
 
 ## Data Availability
 
