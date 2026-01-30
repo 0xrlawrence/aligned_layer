@@ -1,7 +1,7 @@
 # Create a Multisig Wallet using SAFE
 
-> [!WARNING]  
-> Safe Multisig Wallet is not currently supported in Holesky Testnet.
+> [!WARNING]
+> Safe Multisig Wallet is not currently supported in Hoodi Testnet.
 
 > [!WARNING]  
 > You need at least one wallet with funds to deploy the Multisig.
