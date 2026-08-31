@@ -54,6 +54,18 @@ contract AlignedProofAggregationService is
         bytes32 _risc0AggregatorProgramImageId,
         bytes32 _sp1AggregatorProgramVKHash
     ) public initializer {
+        if (newOwner == address(0)) {
+            revert InvalidAddress("newOwner");
+        }
+        if (_alignedAggregatorAddress == address(0)) {
+            revert InvalidAddress("alignedAggregatorAddress");
+        }
+        if (_sp1VerifierAddress == address(0)) {
+            revert InvalidAddress("sp1VerifierAddress");
+        }
+        if (_risc0VerifierAddress == address(0)) {
+            revert InvalidAddress("risc0VerifierAddress");
+        }
         __Ownable_init();
         __UUPSUpgradeable_init();
         _transferOwnership(newOwner);
@@ -152,6 +164,9 @@ contract AlignedProofAggregationService is
     /// @notice Sets the address of the Risc0 verifier contract
     /// @param _risc0VerifierAddress The new address for the Risc0 verifier contract
     function setRisc0VerifierAddress(address _risc0VerifierAddress) external onlyOwner {
+        if (_risc0VerifierAddress == address(0)) {
+            revert InvalidAddress("risc0VerifierAddress");
+        }
         risc0VerifierAddress = _risc0VerifierAddress;
         emit Risc0VerifierAddressUpdated(_risc0VerifierAddress);
     }
@@ -159,6 +174,9 @@ contract AlignedProofAggregationService is
     /// @notice Sets the address of the SP1 verifier contract
     /// @param _sp1VerifierAddress The new address for the SP1 verifier contract
     function setSP1VerifierAddress(address _sp1VerifierAddress) external onlyOwner {
+        if (_sp1VerifierAddress == address(0)) {
+            revert InvalidAddress("sp1VerifierAddress");
+        }
         sp1VerifierAddress = _sp1VerifierAddress;
         emit SP1VerifierAddressUpdated(_sp1VerifierAddress);
     }

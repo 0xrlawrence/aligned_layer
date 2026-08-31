@@ -61,4 +61,6 @@ interface IAlignedProofAggregationService {
     error InvalidProvingSystemId(uint8 actual);
 
     error ProvingSystemIdMismatch(uint8 expected, uint8 received);
+
+    error InvalidAddress(string param);
 }

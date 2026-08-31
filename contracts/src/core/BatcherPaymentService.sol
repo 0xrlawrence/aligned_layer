@@ -194,6 +194,9 @@ contract BatcherPaymentService is
         uint256 amount,
         address withdrawAddress
     ) public payable onlyOwner {
+        if (withdrawAddress == address(0)) {
+            revert InvalidAddress("withdrawAddress");
+        }
         alignedLayerServiceManager.withdraw(amount); // reverts if InsufficientBalance
         // money is now in this contract
         // we transfer it to the withdraw address
