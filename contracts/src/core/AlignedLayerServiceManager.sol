@@ -266,6 +266,29 @@ contract AlignedLayerServiceManager is
         uint256 verificationDataBatchIndex,
         address senderAddress
     ) external view onlyWhenNotPaused(2) returns (bool) {
+        return
+            _verifyBatchInclusion(
+                proofCommitment,
+                pubInputCommitment,
+                provingSystemAuxDataCommitment,
+                proofGeneratorAddr,
+                batchMerkleRoot,
+                merkleProof,
+                verificationDataBatchIndex,
+                senderAddress
+            );
+    }
+
+    function _verifyBatchInclusion(
+        bytes32 proofCommitment,
+        bytes32 pubInputCommitment,
+        bytes32 provingSystemAuxDataCommitment,
+        bytes20 proofGeneratorAddr,
+        bytes32 batchMerkleRoot,
+        bytes memory merkleProof,
+        uint256 verificationDataBatchIndex,
+        address senderAddress
+    ) internal view returns (bool) {
         bytes32 batchIdentifier;
         if (senderAddress == address(0)) {
             batchIdentifier = batchMerkleRoot;
@@ -310,16 +333,17 @@ contract AlignedLayerServiceManager is
         bytes memory merkleProof,
         uint256 verificationDataBatchIndex
     ) external view onlyWhenNotPaused(2) returns (bool) {
-        return this.verifyBatchInclusion(
-            proofCommitment,
-            pubInputCommitment,
-            provingSystemAuxDataCommitment,
-            proofGeneratorAddr,
-            batchMerkleRoot,
-            merkleProof,
-            verificationDataBatchIndex,
-            address(0)
-        );
+        return
+            _verifyBatchInclusion(
+                proofCommitment,
+                pubInputCommitment,
+                provingSystemAuxDataCommitment,
+                proofGeneratorAddr,
+                batchMerkleRoot,
+                merkleProof,
+                verificationDataBatchIndex,
+                address(0)
+            );
     }
 
 
