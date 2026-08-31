@@ -1591,35 +1591,11 @@ impl Batcher {
             nonced_verification_data.verification_data.clone().into();
         replacement_entry.nonced_verification_data = nonced_verification_data;
 
-        // Close old sink in old entry and replace it with the new one
-        {
-            if let Some(messaging_sink) = replacement_entry.messaging_sink {
-                tokio::spawn(async move {
-                    // Before closing the old sink, send a message to the client notifying that their proof
-                    // has been replaced
-                    send_message(
-                        messaging_sink.clone(),
-                        SubmitProofResponseMessage::ProofReplaced,
-                    )
-                    .await;
-
-                    // Note: This shuts down the sink, but does not wait for it to close, so the other side
-                    // might not receive the message. However, we don't want to wait here since it would
-                    // block the batcher.
-                    let mut old_sink = messaging_sink.write().await;
-                    if let Err(e) = old_sink.close().await {
-                        // we dont want to exit here, just log the error
-                        warn!("Error closing sink: {e:?}");
-                    } else {
-                        info!("Old websocket sink closed");
-                    }
-                });
-            } else {
-                warn!(
-                    "Old websocket sink was empty. This should only happen in testing environments"
-                )
-            };
-        }
+        // Hold on to the previous sink instead of closing it here. If the replacement
+        // turns out to be invalid the original entry stays in the queue, and it shares
+        // this sink, so closing it now would leave that proof with no way to report
+        // its inclusion back to the user.
+        let old_messaging_sink = replacement_entry.messaging_sink.take();
 
         replacement_entry.messaging_sink = Some(ws_conn_sink.clone());
         if !batch_state_guard.replacement_entry_is_valid(&replacement_entry) {
@@ -1635,6 +1611,32 @@ impl Batcher {
                 .user_error(&["invalid_replacement_message", ""]);
             return;
         }
+
+        // The replacement is going through, so the old connection can be closed.
+        if let Some(messaging_sink) = old_messaging_sink {
+            tokio::spawn(async move {
+                // Before closing the old sink, send a message to the client notifying that their proof
+                // has been replaced
+                send_message(
+                    messaging_sink.clone(),
+                    SubmitProofResponseMessage::ProofReplaced,
+                )
+                .await;
+
+                // Note: This shuts down the sink, but does not wait for it to close, so the other side
+                // might not receive the message. However, we don't want to wait here since it would
+                // block the batcher.
+                let mut old_sink = messaging_sink.write().await;
+                if let Err(e) = old_sink.close().await {
+                    // we dont want to exit here, just log the error
+                    warn!("Error closing sink: {e:?}");
+                } else {
+                    info!("Old websocket sink closed");
+                }
+            });
+        } else {
+            warn!("Old websocket sink was empty. This should only happen in testing environments")
+        };
 
         info!(
             "Replacement entry is valid, incrementing fee for sender: {:?}, nonce: {:?}, max_fee: {:?}",
