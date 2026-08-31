@@ -331,13 +331,18 @@ func (o *Operator) ProcessNewBatchLogV3(newBatchLog *servicemanager.ContractAlig
 	}
 
 	verificationDataBatchLen := len(verificationDataBatch)
+	if verificationDataBatchLen == 0 {
+		// results is sized from this length, so an empty batch would leave it
+		// unbuffered and block the error path below forever.
+		return fmt.Errorf("batch contains no verification data")
+	}
+
 	results := make(chan bool, verificationDataBatchLen)
 	jobs := make(chan VerificationData, verificationDataBatchLen)
 
 	disabledVerifiersBitmap, err := o.avsReader.DisabledVerifiers()
 	if err != nil {
 		o.Logger.Errorf("Could not check verifiers status: %s", err)
-		results <- false
 		return err
 	}
 
@@ -346,18 +351,31 @@ func (o *Operator) ProcessNewBatchLogV3(newBatchLog *servicemanager.ContractAlig
 		maxWorkers = 1
 	}
 
+	// Closed as soon as the batch is known to be invalid, so the workers stop
+	// verifying proofs whose results can no longer change the outcome.
+	abandon := make(chan struct{})
+	var abandonOnce sync.Once
+	stopVerifying := func() { abandonOnce.Do(func() { close(abandon) }) }
+	defer stopVerifying()
+
 	var wg sync.WaitGroup
 	for i := 0; i < maxWorkers; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for data := range jobs {
+				select {
+				case <-abandon:
+					return
+				default:
+				}
 				o.verify(data, disabledVerifiersBitmap, results)
 				o.metrics.IncOperatorTaskResponses()
 			}
 		}()
 	}
 
+	// jobs is buffered to the full batch length, so these sends never block.
 	for _, verificationData := range verificationDataBatch {
 		jobs <- verificationData
 	}
@@ -370,6 +388,7 @@ func (o *Operator) ProcessNewBatchLogV3(newBatchLog *servicemanager.ContractAlig
 
 	for result := range results {
 		if !result {
+			stopVerifying()
 			return fmt.Errorf("invalid proof")
 		}
 	}
