@@ -18,7 +18,7 @@ const (
 
 // getBatchFromDataServiceWithMultipleURLs tries multiple comma-separated URLs until first successful response
 func (o *Operator) getBatchFromDataServiceWithMultipleURLs(ctx context.Context, batchURLs string, expectedMerkleRoot [32]byte, maxRetries int, retryDelay time.Duration) ([]VerificationData, error) {
-    // Parse comma-separated URLs and limit to max 5
+	// Parse comma-separated URLs and limit them to MaxBatchURLs
 	urls := parseBatchURLs(batchURLs)
 	o.Logger.Infof("Getting batch from data service with %d URLs: %v", len(urls), urls)
 
@@ -42,16 +42,16 @@ func (o *Operator) getBatchFromDataServiceWithMultipleURLs(ctx context.Context, 
 	return nil, fmt.Errorf("failed to get batch from all URLs, errors: %s", strings.Join(errors, "; "))
 }
 
-// parseBatchURLs parses comma-separated URLs and limits to max 5
+// parseBatchURLs parses comma-separated URLs and limits them to MaxBatchURLs
 func parseBatchURLs(batchURLs string) []string {
 	urls := make([]string, 0)
 	for _, url := range strings.Split(batchURLs, ",") {
+		if len(urls) >= MaxBatchURLs {
+			break
+		}
 		trimmedURL := strings.TrimSpace(url)
 		if trimmedURL != "" {
 			urls = append(urls, trimmedURL)
-			if len(urls) > MaxBatchURLs {
-				break
-			}
 		}
 	}
 
@@ -70,6 +70,12 @@ func (o *Operator) getBatchFromDataService(ctx context.Context, batchURL string,
 	transport.ResponseHeaderTimeout = 15 * time.Second
 	client := &http.Client{
 		Transport: transport,
+	}
+
+	// A non-positive retry count would skip the loop entirely and leave resp nil,
+	// which would then be dereferenced below. Always make at least one attempt.
+	if maxRetries < 1 {
+		maxRetries = 1
 	}
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
@@ -122,16 +128,26 @@ func (o *Operator) getBatchFromDataService(ctx context.Context, batchURL string,
 		return nil, fmt.Errorf("error getting batch from data service: %s", resp.Status)
 	}
 
+	maxBatchSize := o.Config.Operator.MaxBatchSize
+
 	contentLength := resp.ContentLength
-	if contentLength > o.Config.Operator.MaxBatchSize {
+	if contentLength > maxBatchSize {
 		return nil, fmt.Errorf("proof size %d exceeds max batch size %d",
-			contentLength, o.Config.Operator.MaxBatchSize)
+			contentLength, maxBatchSize)
+	}
+
+	// resp.ContentLength is -1 when the server does not announce a length, which is
+	// the case for chunked transfer encoding. Fall back to the configured maximum so
+	// those responses are still readable while remaining bounded.
+	readLimit := maxBatchSize
+	if contentLength >= 0 {
+		readLimit = contentLength
 	}
 
 	// Use io.LimitReader to limit the size of the response body
 	// This is to prevent the operator from downloading a larger than expected file
-	// + 1 is added to the contentLength to check if the response body is larger than expected
-	reader := io.LimitedReader{R: resp.Body, N: contentLength + 1}
+	// + 1 is added to the limit to check if the response body is larger than expected
+	reader := io.LimitedReader{R: resp.Body, N: readLimit + 1}
 	batchBytes, err := io.ReadAll(&reader)
 	if err != nil {
 		return nil, err
@@ -139,7 +155,7 @@ func (o *Operator) getBatchFromDataService(ctx context.Context, batchURL string,
 
 	// Check if the response body is larger than expected
 	if reader.N <= 0 {
-		return nil, fmt.Errorf("batch size exceeds max batch size %d", o.Config.Operator.MaxBatchSize)
+		return nil, fmt.Errorf("batch size exceeds max batch size %d", maxBatchSize)
 	}
 
 	// Checks if downloaded merkle root is the same as the expected one
