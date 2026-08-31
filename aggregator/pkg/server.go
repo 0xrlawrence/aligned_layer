@@ -60,8 +60,6 @@ func (agg *Aggregator) ProcessOperatorSignedTaskResponseV2(signedTaskResponse *t
 		return errors.New("invalid response: nil signature")
 	}
 
-	taskIndex := uint32(0)
-
 	// The Aggregator may receive the Task Identifier after the operators.
 	// If that's the case, we won't know about the task at this point
 	// so we make GetTaskIndex retryable, waiting for some seconds,

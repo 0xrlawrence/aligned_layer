@@ -14,7 +14,7 @@ contract BatcherPaymentService is
     UUPSUpgradeable,
     BatcherPaymentServiceStorage
 {
-    // CONSTANTS = 100 Blocks * 12 second block time.
+    // Delay a user must wait between calling unlock() and being able to withdraw.
     uint256 public constant UNLOCK_BLOCK_TIME = 3600 seconds;
 
     // EVENTS
