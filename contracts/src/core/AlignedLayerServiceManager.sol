@@ -254,6 +254,7 @@ contract AlignedLayerServiceManager is
 
     function setDisabledVerifiers(uint256 bitmap) external onlyOwner {
         disabledVerifiers = bitmap;
+        emit DisabledVerifiersUpdated(bitmap);
     }
 
     function verifyBatchInclusion(
@@ -324,6 +325,7 @@ contract AlignedLayerServiceManager is
 
 
     function setAggregator(address _alignedAggregator) public onlyOwner {
+        emit AggregatorUpdated(alignedAggregator, _alignedAggregator);
         alignedAggregator = _alignedAggregator;
     }
 

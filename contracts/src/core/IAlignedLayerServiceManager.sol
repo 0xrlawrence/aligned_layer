@@ -22,6 +22,11 @@ interface IAlignedLayerServiceManager {
     event BatcherBalanceUpdated(address indexed batcher, uint256 newBalance);
     event VerifierDisabled(uint8 indexed verifierIdx);
     event VerifierEnabled(uint8 indexed verifierIdx);
+    event AggregatorUpdated(
+        address indexed previousAggregator,
+        address indexed newAggregator
+    );
+    event DisabledVerifiersUpdated(uint256 bitmap);
 
     // ERRORS
     error BatchAlreadySubmitted(bytes32 batchIdentifierHash); // 3102f10c
