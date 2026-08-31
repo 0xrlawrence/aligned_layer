@@ -21,12 +21,12 @@ jobs:
         working-directory: ./contracts
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           submodules: recursive
 
       - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1.2.0
+        uses: foundry-rs/foundry-toolchain@8f1998e9878d786675189ef566a2e4bf24869773 # v1.2.0
 
       - name: Run tests
         run: forge test --gas-report > ../gasreport.ansi # <- this file name should be unique in your repository!
@@ -36,7 +36,7 @@ jobs:
           FOUNDRY_FUZZ_SEED: 0x${{ github.event.pull_request.base.sha || github.sha }}
 
       - name: Compare gas reports
-        uses: Rubilmax/foundry-gas-diff@v3.21
+        uses: Rubilmax/foundry-gas-diff@60e763d02526ee3299bd04278cb178d1547b134b # v3.21
         with:
           summaryQuantile: 0.9 # only display the 10% most significant gas diffs in the summary (defaults to 20%)
           sortCriteria: avg,max # sort diff rows by criteria
@@ -46,7 +46,7 @@ jobs:
 
       - name: Add gas diff to sticky comment
         if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@773744901bac0e8cbb5a0dc842800d45e9b2b405 # v2
         with:
           # delete the comment in case changes no longer impact gas costs
           delete: ${{ !steps.gas_diff.outputs.markdown }}

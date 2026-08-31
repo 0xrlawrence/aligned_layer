@@ -21,19 +21,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: "1.23"
           cache: false
 
       - name: foundry-toolchain
-        uses: foundry-rs/foundry-toolchain@v1.2.0
+        uses: foundry-rs/foundry-toolchain@8f1998e9878d786675189ef566a2e4bf24869773 # v1.2.0
 
       - name: Cache SP1 bindings
         id: cache-sp1
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: operator/sp1/lib/libsp1_verifier_ffi.so
           key: sp1-bindings-${{ runner.os }}-${{ hashFiles('operator/sp1/lib/**/*.rs', 'operator/sp1/lib/Cargo.*') }}
@@ -48,7 +48,7 @@ jobs:
 
       - name: Cache Risc Zero bindings
         id: cache-risc-zero
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: operator/risc_zero/lib/librisc_zero_verifier_ffi.so
           key: risc-zero-bindings-${{ runner.os }}-${{ hashFiles('operator/risc_zero/lib/**/*.rs', 'operator/risc_zero/lib/Cargo.*') }}
@@ -63,7 +63,7 @@ jobs:
 
       - name: Cache Merkle Tree bindings
         id: cache-merkle-tree
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             operator/merkle_tree/lib/libmerkle_tree.so
@@ -80,7 +80,7 @@ jobs:
 
       - name: Cache Mina bindings
         id: cache-mina
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: operator/mina/lib/libmina_state_verifier_ffi.so
           key: mina-bindings-${{ runner.os }}-${{ hashFiles('operator/mina/lib/**/*.rs', 'operator/mina/lib/Cargo.*') }}
@@ -95,7 +95,7 @@ jobs:
 
       - name: Cache Mina Account bindings
         id: cache-mina-account
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: operator/mina_account/lib/libmina_account_verifier_ffi.so
           key: mina-account-bindings-${{ runner.os }}-${{ hashFiles('operator/mina_account/lib/**/*.rs', 'operator/mina_account/lib/Cargo.*') }}

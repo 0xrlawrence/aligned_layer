@@ -17,17 +17,17 @@ jobs:
     runs-on: aligned-runner
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Rust
-        uses: actions-rs/toolchain@v1
+        uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # v1
         with:
           toolchain: 1.88.0
           components: rustfmt, clippy
           override: true
 
       - name: foundry-toolchain
-        uses: foundry-rs/foundry-toolchain@v1.2.0
+        uses: foundry-rs/foundry-toolchain@8f1998e9878d786675189ef566a2e4bf24869773 # v1.2.0
 
       # Reference: https://github.com/succinctlabs/sp1/actions/runs/8886659400/workflow#L61-L65
       - name: Install sp1 toolchain
@@ -43,7 +43,7 @@ jobs:
           ~/.risc0/bin/rzup install
 
       - name: Cache Rust dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/.cargo/registry
